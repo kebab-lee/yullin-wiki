@@ -8,7 +8,7 @@
 // 문구는 Figma 회원가입(1:1194) / 필드 variants(1:1312) 정본.
 // =============================================================
 
-import { GENDERS } from "@/lib/types";
+import { GENDERS, isGender, type Gender } from "@/lib/types";
 
 import {
   collectErrors,
@@ -34,6 +34,15 @@ const CHOICE_REQUIRED = "⚠️ 선택해주세요.";
 export const LOGIN_ID_AVAILABLE = "✅ 사용 가능한 아이디입니다";
 export const LOGIN_ID_TAKEN = "⚠ 중복된 아이디입니다";
 
+/**
+ * 로그인 실패 문구. 필드 검증이 아니라 인증 결과지만, 사용자에게 보이는 문구의
+ * 정본은 이 모듈이 소유한다는 원칙에 따라 여기 둔다. 문구 자체는 Figma 1:1432 정본.
+ *
+ * **아이디가 없는 경우와 비밀번호가 틀린 경우가 반드시 같은 문구여야 한다.**
+ * 구분해서 알려주면 어떤 아이디가 존재하는지 훑을 수 있다(계정 열거).
+ */
+export const LOGIN_FAILED = "아이디 혹은 비밀번호가 잘못되었습니다.";
+
 // ── 규칙 ──────────────────────────────────────────────────────
 // users.login_id varchar(30) / name varchar(50) / phone varchar(20) 과 맞춘다.
 const LOGIN_ID_PATTERN = /^[a-z0-9_]{4,20}$/;
@@ -46,6 +55,13 @@ const PHONE_PATTERN = /^01[016789]-\d{3,4}-\d{4}$/;
 
 export const CHURCH_MEMBER_VALUES = ["MEMBER", "NON_MEMBER"] as const;
 export type ChurchMemberChoice = (typeof CHURCH_MEMBER_VALUES)[number];
+
+/** isGender 와 같은 이유의 가드 — service 가 캐스팅 없이 좁히게 한다. */
+export function isChurchMemberChoice(
+  value: string,
+): value is ChurchMemberChoice {
+  return (CHURCH_MEMBER_VALUES as readonly string[]).includes(value);
+}
 
 /** 달력에 실제로 존재하는 과거 날짜인가 (2026-02-30, 미래 생일 배제). */
 function isRealPastDate(value: string): boolean {
@@ -154,4 +170,62 @@ export function validateSignup(input: SignupInput): SignupErrors {
     phone: errorOf(validatePhone(input.phone)),
     churchMember: errorOf(validateChurchMember(input.churchMember)),
   });
+}
+
+/**
+ * 검증을 통과한 회원가입 입력.
+ *
+ * 선택 필드가 유니온으로 좁혀져 있고, 확인용 비밀번호는 빠져 있다
+ * (저장할 값이 아니라 입력 검사용이었으므로).
+ */
+export type ParsedSignupInput = {
+  loginId: string;
+  password: string;
+  name: string;
+  gender: Gender;
+  birthDate: string;
+  phone: string;
+  churchMember: ChurchMemberChoice;
+};
+
+export type SignupParseResult =
+  | { readonly ok: true; readonly value: ParsedSignupInput }
+  | { readonly ok: false; readonly errors: SignupErrors };
+
+/**
+ * 폼과 똑같은 규칙으로 검증하되, 통과한 입력을 도메인 값으로 좁혀서 돌려준다.
+ *
+ * 폼은 문구만 필요하므로 validateSignup 을 쓰고, service 는 이 함수를 쓴다.
+ * 검증과 타입 좁히기를 한 번에 끝내야 service 안에 `as Gender` 같은 캐스팅이
+ * 생기지 않는다 — 규칙 자체는 위 함수들을 그대로 재사용한다.
+ */
+export function parseSignup(input: SignupInput): SignupParseResult {
+  const errors = validateSignup(input);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  const { gender, churchMember } = input;
+  // 위 validateSignup 의 oneOf 가 이미 통과시킨 값이라 도달하지 않는다.
+  // 타입 좁히기를 성립시키기 위한 방어 분기다.
+  if (!isGender(gender) || !isChurchMemberChoice(churchMember)) {
+    return {
+      ok: false,
+      errors: collectErrors<keyof SignupInput>({
+        gender: errorOf(validateGender(gender)),
+        churchMember: errorOf(validateChurchMember(churchMember)),
+      }),
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      loginId: input.loginId,
+      password: input.password,
+      name: input.name.trim(),
+      gender,
+      birthDate: input.birthDate,
+      phone: input.phone,
+      churchMember,
+    },
+  };
 }

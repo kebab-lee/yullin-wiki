@@ -20,6 +20,18 @@ export type UserStatus = "ACTIVE" | "BLOCKED" | "WITHDRAWN";
  */
 export type Role = "USER" | "ADMIN";
 
+export const ROLES: readonly Role[] = ["USER", "ADMIN"];
+
+/**
+ * 임의의 값이 Role 인가.
+ *
+ * JWT payload 처럼 밖에서 들어온 unknown 을 좁힐 때 쓴다 — 서명이 유효해도
+ * 안에 든 role 값까지 믿지는 않는다.
+ */
+export function isRole(value: unknown): value is Role {
+  return typeof value === "string" && (ROLES as readonly string[]).includes(value);
+}
+
 export const GENDERS: readonly Gender[] = ["FEMALE", "MALE"];
 
 /** 성별 표시명. 값(DB)과 표시명을 한 곳에서만 잇는다. */
@@ -27,6 +39,16 @@ export const GENDER_LABEL: Record<Gender, string> = {
   FEMALE: "여성",
   MALE: "남성",
 };
+
+/**
+ * 폼에서 올라온 문자열이 Gender 인가.
+ *
+ * 검증(validation/user.ts)이 이미 걸러낸 값이라도 타입에는 그 사실이 남지 않는다.
+ * service 가 `as Gender` 캐스팅 대신 이 가드로 좁힌다.
+ */
+export function isGender(value: string): value is Gender {
+  return (GENDERS as readonly string[]).includes(value);
+}
 
 /**
  * 사용자 도메인 모델.

@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import type { CommentPreview, ReportPreview } from "@/lib/types";
 
 // ---- Dummy data ----
@@ -172,7 +174,10 @@ function ReportCard({ author, content, reason, isNew }: ReportPreview) {
 
 // ---- Page ----
 
-export default function AdminPage() {
+export default async function AdminPage() {
+  // 화면 접근 차단. 데이터 변경 차단은 service 의 assertAdmin 이 따로 맡는다.
+  await requireAdmin();
+
   return (
     <div className="pt-[97px] pb-[80px]">
       {/* 인사 + 퀵 액션 */}

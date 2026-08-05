@@ -25,6 +25,9 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# 로컬 개발용 계정 메모 (docs/ 는 추적 대상이라 명시적으로 제외한다)
+docs/local-accounts.md
+
 # vercel
 .vercel
 

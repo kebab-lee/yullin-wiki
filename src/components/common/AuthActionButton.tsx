@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
 import type { ViewerRole } from "@/lib/types";
 
 type AuthActionButtonProps = {
@@ -18,25 +23,58 @@ const VARIANT_CLASS = {
     "border border-white px-[10px] py-[7px] text-[14px] font-medium leading-[15px] text-white",
 } as const;
 
+const BASE_CLASS =
+  "flex flex-col items-center justify-center whitespace-nowrap rounded-pill";
+
 /**
  * 로그인 / 로그아웃 액션 버튼.
  *
  * SiteHeader(유저·관리자 헤더)와 홈 히어로 헤더바가 공유한다.
- * 이동 대상과 라벨을 결정하는 규칙은 여기 한 곳에만 둔다 —
- * 인증이 붙으면 href만 실제 핸들러로 바꾸면 양쪽이 같이 따라온다.
+ * 이동 대상과 라벨을 결정하는 규칙은 여기 한 곳에만 둔다.
+ *
+ * 로그아웃은 링크가 아니라 POST 다 — 세션 쿠키를 지우는 상태 변경이라
+ * 프리페치나 이미지 태그로 남이 트리거할 수 있으면 안 된다. 그래서 이 조각만
+ * 클라이언트 컴포넌트이고, 헤더 자체는 서버 컴포넌트로 남는다.
  */
 export default function AuthActionButton({
   role,
   variant = "light",
 }: AuthActionButtonProps) {
-  const isLoggedIn = role !== "GUEST";
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  const className = `${BASE_CLASS} ${VARIANT_CLASS[variant]}`;
+
+  if (role === "GUEST") {
+    return (
+      <Link href="/login" className={className}>
+        로그인
+      </Link>
+    );
+  }
+
+  const handleLogout = async () => {
+    if (pending) return;
+
+    setPending(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      // 쿠키가 사라졌으니 서버 컴포넌트(헤더)를 다시 그려야 GUEST 로 돌아간다.
+      router.push("/");
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
-    <Link
-      href={isLoggedIn ? "/logout" : "/login"}
-      className={`flex flex-col items-center justify-center whitespace-nowrap rounded-pill ${VARIANT_CLASS[variant]}`}
+    <button
+      type="button"
+      onClick={handleLogout}
+      disabled={pending}
+      className={`${className} disabled:opacity-50`}
     >
-      {isLoggedIn ? "로그아웃" : "로그인"}
-    </Link>
+      로그아웃
+    </button>
   );
 }

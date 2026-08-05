@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import FieldMessage from "@/components/common/FieldMessage";
@@ -7,6 +8,8 @@ import FormRow from "@/components/common/FormRow";
 import RadioGroup from "@/components/common/RadioGroup";
 import SelectField from "@/components/common/SelectField";
 import TextField from "@/components/common/TextField";
+import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
+import type { ApiErrorBody } from "@/lib/api/types";
 import { GENDERS, GENDER_LABEL } from "@/lib/types";
 import {
   LOGIN_ID_AVAILABLE,
@@ -29,6 +32,9 @@ const EMPTY_FORM: SignupInput = {
   churchMember: "",
 };
 
+/** 서버가 돌려준 fields 중 이 폼이 그릴 수 있는 키만 추린다. */
+const SIGNUP_FIELD_KEYS = Object.keys(EMPTY_FORM) as (keyof SignupInput)[];
+
 const GENDER_OPTIONS = GENDERS.map((gender) => ({
   value: gender,
   label: GENDER_LABEL[gender],
@@ -39,29 +45,52 @@ const CHURCH_MEMBER_OPTIONS = [
   { value: "NON_MEMBER", label: "아닙니다" },
 ] as const;
 
-/**
- * 서버가 붙기 전까지 "중복" 상태를 눈으로 확인하기 위한 임시 목록.
- * 실제 판정은 서버가 하며, 이 상수는 API 연결과 함께 사라진다.
- */
-const TAKEN_LOGIN_IDS = ["admin", "yullin"];
-
-type DuplicateState = "idle" | "available" | "taken";
-
 const NEEDS_DUPLICATE_CHECK = "⚠ 아이디 중복 확인을 해주세요";
+
+/** 중복확인 결과. 어떤 아이디를 확인한 것인지까지 들고 있어야 뜻이 있다. */
+type DuplicateCheck = { loginId: string; available: boolean };
+
+/** 실패 응답 바디에서 필드 문구를 꺼낸다. 모양이 어긋나면 조용히 비운다. */
+function toSignupErrors(body: ApiErrorBody): SignupErrors {
+  const errors: SignupErrors = {};
+  if (!body.fields) return errors;
+
+  for (const key of SIGNUP_FIELD_KEYS) {
+    const message = body.fields[key];
+    if (typeof message === "string") errors[key] = message;
+  }
+  return errors;
+}
 
 /**
  * 회원가입 폼 — Figma 1:1194 (필드 상태 variants 1:1312).
  *
  * 검증은 src/lib/validation/user.ts 의 순수 함수에 맡긴다. 이 컴포넌트는
  * "언제 검증하고 어디에 문구를 띄우는가"만 결정한다 — 규칙 자체를 여기 두면
- * 회원가입 API 가 붙을 때 service 레이어가 같은 규칙을 다시 써야 한다.
+ * service 레이어가 같은 규칙을 다시 써야 한다.
  *
- * 지금은 퍼블리싱 단계라 제출이 서버로 나가지 않는다.
+ * 서버 호출은 자기 도메인 API 두 개뿐이다. Supabase 의 존재를 알지 못하며,
+ * 백엔드가 Java 로 바뀌어도 이 파일은 그대로다.
  */
 export default function SignupForm() {
+  const router = useRouter();
   const [values, setValues] = useState<SignupInput>(EMPTY_FORM);
   const [errors, setErrors] = useState<SignupErrors>({});
-  const [duplicate, setDuplicate] = useState<DuplicateState>("idle");
+  const [check, setCheck] = useState<DuplicateCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  /**
+   * 확인한 아이디와 지금 입력된 아이디가 같을 때만 결과가 유효하다.
+   * 입력이 바뀌면 자동으로 무효가 되고, 늦게 도착한 응답도 같은 이유로 버려진다.
+   */
+  const duplicate: "idle" | "available" | "taken" =
+    check && check.loginId === values.loginId
+      ? check.available
+        ? "available"
+        : "taken"
+      : "idle";
 
   /** 입력을 고치는 순간 그 필드의 에러는 지운다 — 고치는 중에 빨간 문구를 붙잡아두지 않는다. */
   const setField = (field: keyof SignupInput) => (value: string) => {
@@ -73,33 +102,52 @@ export default function SignupForm() {
       if (field === "password") delete next.passwordConfirm;
       return next;
     });
-    // 아이디가 바뀌면 이전 중복 확인 결과는 그 아이디의 것이 아니다.
-    if (field === "loginId") setDuplicate("idle");
+    setFormError(null);
   };
 
-  const handleDuplicateCheck = () => {
+  const handleDuplicateCheck = async () => {
     const result = validateLoginId(values.loginId);
     if (!result.valid) {
       setErrors((prev) => ({ ...prev, loginId: result.message }));
-      setDuplicate("idle");
+      setCheck(null);
       return;
     }
 
-    // TODO: GET /api/users/check-duplicate?userId=
-    setDuplicate(
-      TAKEN_LOGIN_IDS.includes(values.loginId.toLowerCase())
-        ? "taken"
-        : "available",
-    );
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next.loginId;
-      return next;
-    });
+    const loginId = values.loginId;
+    setChecking(true);
+    setFormError(null);
+    try {
+      const response = await fetch(
+        `/api/users/check-duplicate?loginId=${encodeURIComponent(loginId)}`,
+      );
+
+      if (!response.ok) {
+        const body = await readErrorBody(response);
+        setErrors((prev) => ({
+          ...prev,
+          ...toSignupErrors(body),
+        }));
+        setCheck(null);
+        return;
+      }
+
+      const { available }: { available: boolean } = await response.json();
+      setCheck({ loginId, available });
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.loginId;
+        return next;
+      });
+    } catch {
+      setFormError(NETWORK_ERROR);
+    } finally {
+      setChecking(false);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (submitting) return;
 
     const nextErrors = validateSignup(values);
     // 형식이 맞아도 중복 확인을 안 거쳤으면 넘기지 않는다.
@@ -111,7 +159,36 @@ export default function SignupForm() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    // TODO: POST /api/users
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      if (!response.ok) {
+        // 400(검증) / 409(중복)는 필드 문구로, 그 외는 폼 단위 문구로 떨어뜨린다.
+        const body = await readErrorBody(response);
+        const fieldErrors = toSignupErrors(body);
+
+        if (Object.keys(fieldErrors).length > 0) {
+          setErrors(fieldErrors);
+          // 서버가 중복이라고 답했으면 클라이언트의 "사용 가능" 판정도 무효다.
+          if (fieldErrors.loginId) setCheck(null);
+        } else {
+          setFormError(body.message);
+        }
+        return;
+      }
+
+      router.push("/login");
+    } catch {
+      setFormError(NETWORK_ERROR);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const passwordMessage = errors.password ?? errors.passwordConfirm;
@@ -142,7 +219,8 @@ export default function SignupForm() {
             <button
               type="button"
               onClick={handleDuplicateCheck}
-              className="h-[30px] shrink-0 whitespace-nowrap rounded-badge border border-brand-red px-[10px] text-[13px] font-medium leading-[16px] text-brand-red transition-colors hover:bg-brand-red-pink"
+              disabled={checking}
+              className="h-[30px] shrink-0 whitespace-nowrap rounded-badge border border-brand-red px-[10px] text-[13px] font-medium leading-[16px] text-brand-red transition-colors hover:bg-brand-red-pink disabled:opacity-50"
             >
               중복확인
             </button>
@@ -263,10 +341,16 @@ export default function SignupForm() {
       </div>
 
       {/* Figma: 제출 버튼 98x36, 폼 하단 중앙 */}
-      <div className="mt-[20px] flex justify-center">
+      <div className="mt-[20px] flex flex-col items-center">
+        {/* 필드로 귀속되지 않는 실패(네트워크·서버 오류)만 여기 뜬다. */}
+        {formError ? (
+          <FieldMessage tone="error">{formError}</FieldMessage>
+        ) : null}
+
         <button
           type="submit"
-          className="h-[36px] w-[98px] rounded-badge bg-brand-red text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90"
+          disabled={submitting}
+          className="mt-[5px] h-[36px] w-[98px] rounded-badge bg-brand-red text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           가입하기
         </button>

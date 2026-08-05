@@ -29,6 +29,8 @@ Supabase (Postgres)
 - `supabase-js` import가 `src/lib/repositories/` 밖에 등장하면 안 된다. 예외 없음.
 - 클라이언트는 Supabase의 존재를 몰라야 한다. 자기 프로젝트 API만 호출한다.
 - Route Handler에 비즈니스 로직 금지. service 호출 후 JSON 반환만.
+- service는 라우트 경로가 아니라 도메인 기준으로 나눈다.
+  `/api/users/*` → `userService`, `/api/auth/*` → `authService`.
 - Repository는 DB row를 **도메인 모델로 변환해서** 반환한다. snake_case 컬럼과 row 모양이
   프론트까지 새어나가면 안 된다. (Java가 같은 JSON을 반환하면 프론트 무변경)
 - 인증도 `src/lib/auth/` 추상화를 거친다. Supabase Auth SDK를 UI에 흩뿌리지 않는다.
@@ -67,6 +69,12 @@ docs/                       설계 문서
 - **RLS는 최후 방어선일 뿐, 의존하지 않는다.** RLS는 Supabase 전용이라 Java로 옮길 때 사라진다.
 - 권한 체크는 service 레이어에 명시적 코드로 작성한다 ("이 사용자가 admin인가",
   "이 페이지를 수정할 권한이 있는가"). 그래야 Spring Security로 그대로 이식된다.
+- **`/admin` 하위 페이지는 반드시 `requireAdmin()`을 호출한다** (`src/lib/auth/requireAdmin.ts`).
+- 이건 **화면 접근 차단**이며, **데이터 변경 차단은 별도로 service의 `assertAdmin`이 담당한다.
+  둘 다 필요하다. 하나로 대체하지 마라.** API는 페이지를 거치지 않고 직접 호출되므로
+  페이지 가드만으로는 막히지 않고, 반대로 service 가드만으로는 화면이 그려지는 것을 못 막는다.
+- 페이지 가드를 `layout.tsx`에 몰아넣지 않는다. 같은 layout을 공유하는 형제 라우트 간
+  클라이언트 사이드 이동에서는 layout이 다시 실행되지 않아 가드가 건너뛰어진다.
 
 ## 인증
 

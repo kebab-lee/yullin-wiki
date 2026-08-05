@@ -1,35 +1,59 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import TextField from "@/components/common/TextField";
+import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
+import type { User } from "@/lib/types";
 
 /**
  * 로그인 폼 — Figma 로그인 1:1207 / 에러 상태 1:1432.
  *
  * 관리자 로그인(AdLogin 1:1456)도 필드 구성이 동일하므로 폼을 나누지 않는다.
- * 역할 구분은 폼이 아니라 인증 결과(users.role)가 한다.
+ * 역할 구분은 폼이 아니라 인증 결과(users.role)가 한다 — 로그인 성공 후
+ * 응답의 role 로 이동 대상만 갈린다.
  *
- * 지금은 퍼블리싱 단계라 제출이 서버로 나가지 않는다. 에러는 화면이 실제로
- * 동작하도록 로컬 검증으로만 채워 두고, API 가 붙으면 setError 의 인자만
- * 응답 메시지로 바뀐다 — 에러 표시 경로는 그대로 재사용된다.
+ * 에러 문구는 서버가 준 것을 그대로 그린다. 어느 칸이 틀렸는지 폼이 추측하면
+ * 서버가 일부러 통일해 둔 문구(계정 열거 방지)가 무너진다.
  */
 export default function LoginForm() {
+  const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    if (!loginId.trim() || !password) {
-      setError("아이디 혹은 비밀번호가 잘못되었습니다.");
-      return;
-    }
+    if (submitting) return;
 
     setError(null);
-    // TODO: POST /api/auth/login
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loginId, password }),
+      });
+
+      if (!response.ok) {
+        setError((await readErrorBody(response)).message);
+        return;
+      }
+
+      const { user }: { user: User } = await response.json();
+
+      // 세션 쿠키가 생겼으니 서버 컴포넌트(헤더)가 다시 그려져야 한다.
+      // push 만 하면 클라이언트 라우터 캐시가 GUEST 헤더를 그대로 재사용한다.
+      router.replace(user.role === "ADMIN" ? "/admin" : "/");
+      router.refresh();
+    } catch {
+      setError(NETWORK_ERROR);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -64,7 +88,8 @@ export default function LoginForm() {
       <div className="mt-[40px] flex flex-col">
         <button
           type="submit"
-          className="h-[51px] w-full rounded-badge bg-brand-red text-[16px] font-medium leading-[19px] text-white transition-opacity hover:opacity-90"
+          disabled={submitting}
+          className="h-[51px] w-full rounded-badge bg-brand-red text-[16px] font-medium leading-[19px] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           로그인
         </button>

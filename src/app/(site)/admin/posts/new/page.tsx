@@ -1,26 +1,15 @@
-'use client'
+import NewPostEditor from '@/components/admin/editor/NewPostEditor'
+import { requireAdmin } from '@/lib/auth/requireAdmin'
 
-import dynamic from 'next/dynamic'
+/**
+ * 새 게시물 작성 — /admin 하위이므로 서버 가드를 거친다.
+ *
+ * 에디터는 ssr: false 라 클라이언트 경계가 필요한데, 그 경계는 NewPostEditor 가
+ * 들고 있다. 페이지 자체는 서버 컴포넌트로 남아야 requireAdmin 을 부를 수 있다.
+ */
+export default async function NewPostPage() {
+  // 화면 접근 차단. 데이터 변경 차단은 service 의 assertAdmin 이 따로 맡는다.
+  await requireAdmin()
 
-const WikiEditor = dynamic(
-  () => import('@/components/admin/editor/WikiEditor'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="mx-auto max-w-[832px] py-5 px-4 animate-pulse">
-        <div className="flex gap-4 mb-6">
-          <div className="h-8 w-44 bg-gray-100 rounded-full" />
-          <div className="h-8 w-32 bg-gray-100 rounded-full" />
-        </div>
-        <div className="h-10 w-3/4 bg-gray-100 rounded mb-3" />
-        <div className="h-px bg-gray-200 mb-0" />
-        <div className="h-11 bg-gray-50 rounded mb-0" />
-        <div className="h-[500px] bg-gray-50 rounded" />
-      </div>
-    ),
-  }
-)
-
-export default function NewPostPage() {
-  return <WikiEditor />
+  return <NewPostEditor />
 }
