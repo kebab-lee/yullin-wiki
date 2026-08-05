@@ -50,6 +50,11 @@ create table users (
   created_at        timestamptz  not null default now(),
   updated_at        timestamptz  not null default now(),
 
+  -- 탈퇴 "시각"만 기록한다. 계정 상태의 정본은 어디까지나 status = 'WITHDRAWN' 이고
+  -- deleted_at 은 그 판정에 쓰지 않는다 (플래그를 두 벌 만들지 않는다는 원칙).
+  -- 언제 탈퇴했는지는 status 로 표현할 수 없어서 별도 컬럼으로 둔다.
+  deleted_at        timestamptz,
+
   constraint users_gender_chk check (gender is null or gender in ('MALE', 'FEMALE')),
   constraint users_role_chk   check (role   in ('USER', 'ADMIN')),
   constraint users_status_chk check (status in ('ACTIVE', 'BLOCKED', 'WITHDRAWN'))

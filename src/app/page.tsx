@@ -5,11 +5,11 @@ import CategoryButtonRow from "@/components/home/CategoryButtonRow";
 import RecentPostCard from "@/components/home/RecentPostCard";
 import SectionHeader from "@/components/home/SectionHeader";
 import MoreButton from "@/components/common/MoreButton";
-import type { Category, PagePreview, Role } from "@/lib/types";
+import type { Category, PagePreview, ViewerRole } from "@/lib/types";
 
 // TODO: 인증 연동 시 세션에서 주입. 퍼블리싱용 임시값.
 // (site)/layout.tsx 의 role 과 같은 자리에서 교체된다.
-const role: Role = "GUEST";
+const role: ViewerRole = "GUEST";
 
 // TODO: GET /api/categories 연동 시 제거
 // 값은 supabase/migrations/20260804000000_init.sql 의 seed와 동일하다.

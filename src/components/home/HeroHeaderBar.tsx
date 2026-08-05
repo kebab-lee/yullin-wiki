@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import AuthActionButton from "@/components/common/AuthActionButton";
-import type { Role } from "@/lib/types";
+import type { ViewerRole } from "@/lib/types";
 
 /**
  * 홈 히어로 안의 헤더바 — Figma Home(1:318) > Frame 1304 (x=316 y=79, 880x50).
@@ -11,7 +11,7 @@ import type { Role } from "@/lib/types";
  *
  * 레이아웃: 좌우 40px 인셋(내부 폭 800) · 상단 행 35px · 15px 아래 1px 라인.
  */
-export default function HeroHeaderBar({ role }: { role: Role }) {
+export default function HeroHeaderBar({ role }: { role: ViewerRole }) {
   const isLoggedIn = role !== "GUEST";
 
   return (

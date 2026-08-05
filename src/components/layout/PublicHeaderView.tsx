@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import AuthActionButton from "@/components/common/AuthActionButton";
-import type { Role } from "@/lib/types";
+import type { ViewerRole } from "@/lib/types";
 import HeaderSearchBox from "./HeaderSearchBox";
 
 /**
@@ -11,7 +11,7 @@ import HeaderSearchBox from "./HeaderSearchBox";
  * SiteHeader 를 통해서만 렌더된다. 직접 import 하지 않는다.
  * role 은 로그인/로그아웃 표시 분기에만 쓴다.
  */
-export default function PublicHeaderView({ role }: { role: Role }) {
+export default function PublicHeaderView({ role }: { role: ViewerRole }) {
   const isLoggedIn = role !== "GUEST";
 
   return (

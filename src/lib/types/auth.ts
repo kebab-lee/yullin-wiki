@@ -1,13 +1,15 @@
 // =============================================================
 // 인증 도메인 모델
 //
-// DB 의 users.role 은 varchar + CHECK 로 저장한다 (native ENUM 금지).
-// 값이 그대로 이 문자열 리터럴 유니온으로 매핑되고,
-// Java 쪽에서는 @Enumerated(EnumType.STRING) 로 같은 값을 쓴다.
+// 저장되는 역할 값(USER / ADMIN)의 정본은 users.role 이고,
+// 타입도 사용자 도메인이 소유한다 (types/user.ts 의 `Role`).
+// 이 파일은 거기에 "로그인하지 않은 방문자"를 더한 화면용 타입만 얹는다.
 // =============================================================
+
+import type { Role } from "./user";
 
 /**
  * 화면 권한 구분.
  * GUEST 는 DB 에 저장되는 값이 아니라 "로그인하지 않은 방문자"를 뜻하는 UI 상태다.
  */
-export type Role = "GUEST" | "USER" | "ADMIN";
+export type ViewerRole = Role | "GUEST";

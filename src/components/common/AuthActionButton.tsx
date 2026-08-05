@@ -1,8 +1,8 @@
 import Link from "next/link";
-import type { Role } from "@/lib/types";
+import type { ViewerRole } from "@/lib/types";
 
 type AuthActionButtonProps = {
-  role: Role;
+  role: ViewerRole;
   /**
    * 배경에 따른 외형.
    * - `light` : 흰 배경 위 (SiteHeader) — 연두 pill

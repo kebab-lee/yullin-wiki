@@ -1,4 +1,4 @@
-import type { Role } from "@/lib/types";
+import type { ViewerRole } from "@/lib/types";
 
 import AdminHeaderView from "./AdminHeaderView";
 import PublicHeaderView from "./PublicHeaderView";
@@ -10,7 +10,7 @@ import PublicHeaderView from "./PublicHeaderView";
  * 인증이 붙으면 role 의 출처(layout 의 상수 → 세션)만 바뀌고
  * 이 컴포넌트와 하위 뷰는 변경되지 않는다.
  */
-export function SiteHeader({ role }: { role: Role }) {
+export function SiteHeader({ role }: { role: ViewerRole }) {
   if (role === "ADMIN") {
     return <AdminHeaderView />;
   }
