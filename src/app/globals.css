@@ -1,0 +1,162 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================
+   디자인 토큰
+   출처: Figma `yullinwiki-joseph` (zgimD0nr4SebHWiMLn4itq)
+         - Home   node 1:318
+         - Footer node 1:396
+
+   색상은 Tailwind의 알파 수식어(bg-brand-red/50)를 살리기 위해
+   공백 구분 RGB 채널로 둔다. 순수 CSS에서 쓸 때는 rgb(var(--…)).
+   컴포넌트에서는 hex를 직접 쓰지 말고 이 토큰(또는 Tailwind 클래스)을 참조한다.
+   ============================================================= */
+
+:root {
+  /* ── 브랜드 (Figma 변수) ── */
+  --color-brand-red: 179 32 32; /* #B32020 */
+  --color-brand-red-white: 246 245 244; /* #F6F5F4 */
+  --color-brand-red-pink: 248 236 234; /* #F8ECEA */
+  --color-redgray-light: 217 177 177; /* #D9B1B1 */
+
+  /* ── 카테고리 초록 (Figma 변수) ── */
+  --color-category-green: 194 205 171; /* #C2CDAB — 항목 버튼 테두리 */
+  --color-category-green2: 155 174 115; /* #9BAE73 — 항목 버튼 선택/hover 채움 */
+  --color-category-green-light: 232 236 208; /* #E8ECD0 — 태그 배지 배경 */
+  --color-category-green-dark: 128 143 68; /* #808F44 — 태그 배지 글자 */
+
+  /* ── 그레이 (Figma 변수) ── */
+  --color-gray2: 219 221 223; /* #DBDDDF — 구분선, placeholder */
+  --color-gray3: 144 150 156; /* #90969C — 보조 텍스트, 아이콘 */
+
+  /* ── 중립 (Figma 변수) ── */
+  --color-white: 255 255 255; /* #FFFFFF */
+  --color-black: 0 0 0; /* #000000 */
+
+  /* ── Figma 변수 집합에는 없지만 시안에서 쓰이는 값 ──
+     노드 1:318 / 1:396 의 변수로 등록돼 있지 않아 raw hex로 잡혀 있던 것들.
+     디자이너가 변수로 승격하면 위 블록으로 옮긴다. */
+  --color-gray4: 85 85 85; /* #555555 — 더보기 셰브론, 인용문 본문 */
+  --color-brand-red-muted: 139 102 102; /* #8B6666 — 어드민 헤더 검색창 */
+
+  /* ── 타이포그래피 ── */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
+    BlinkMacSystemFont, sans-serif;
+
+  /* ── 레이아웃 (Figma 고정 폭) ── */
+  --layout-page: 1512px; /* 아트보드 전체 폭 */
+  --layout-hero: 880px; /* 히어로 빨강 박스 · 헤더 · Footer 내부 폭 */
+  --layout-content: 895px; /* 홈 콘텐츠 섹션 폭 */
+  --layout-hero-inner: 504px; /* 히어로 중앙 컬럼 폭 */
+  --layout-admin: 900px; /* 어드민 대시보드 폭 */
+
+  /* ── 반경 ── */
+  --radius-hero: 50px; /* 히어로 하단 라운드 */
+  --radius-card: 20px; /* 게시물 / 댓글 카드 */
+  --radius-badge: 10px; /* 링크 배지 · 태그 배지 */
+  --radius-pill: 100px; /* 검색창 · 항목 버튼 · 로그아웃 */
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  background-color: rgb(var(--color-white));
+  color: rgb(var(--color-black));
+}
+
+/* ── Wiki Editor (Tiptap prose 스타일) ── */
+.wiki-editor .ProseMirror {
+  outline: none;
+  min-height: 500px;
+  padding: 24px 0;
+}
+
+.wiki-editor .ProseMirror h1 {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.25;
+  margin: 28px 0 10px;
+}
+.wiki-editor .ProseMirror h2 {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 22px 0 8px;
+}
+.wiki-editor .ProseMirror h3 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 18px 0 6px;
+}
+.wiki-editor .ProseMirror p {
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.85;
+  margin: 6px 0;
+}
+
+/* Placeholder */
+.wiki-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: rgb(var(--color-gray2));
+  pointer-events: none;
+  height: 0;
+}
+
+/* 머릿말 (blockquote) */
+.wiki-editor .ProseMirror blockquote {
+  border-left: 4px solid rgb(var(--color-brand-red));
+  padding-left: 16px;
+  margin: 16px 0;
+  color: rgb(var(--color-gray4));
+}
+
+/* 리스트 */
+.wiki-editor .ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.wiki-editor .ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.wiki-editor .ProseMirror li {
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.85;
+}
+.wiki-editor .ProseMirror li > p {
+  margin: 2px 0;
+}
+
+/* 인라인 */
+.wiki-editor .ProseMirror strong { font-weight: 700; }
+.wiki-editor .ProseMirror em { font-style: italic; }
+.wiki-editor .ProseMirror s { text-decoration: line-through; }
+
+/* 링크 */
+.wiki-editor .ProseMirror a {
+  color: rgb(var(--color-brand-red));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 이미지 */
+.wiki-editor .ProseMirror img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 16px 0;
+  display: block;
+}
+
+/* 선택된 이미지 */
+.wiki-editor .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid rgb(var(--color-brand-red));
+}
