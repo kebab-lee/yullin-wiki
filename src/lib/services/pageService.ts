@@ -14,8 +14,13 @@ import type { SessionPayload } from "@/lib/auth/session";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import * as categoryRepository from "@/lib/repositories/categoryRepository";
 import * as pageRepository from "@/lib/repositories/pageRepository";
+import * as pageRevisionRepository from "@/lib/repositories/pageRevisionRepository";
 import type { Page, PageContent, PageDetail, PageSummary } from "@/lib/types";
-import { CATEGORY_NOT_FOUND, parseNewPage } from "@/lib/validation/page";
+import {
+  CATEGORY_NOT_FOUND,
+  parsePageForm,
+  type ParsedPageForm,
+} from "@/lib/validation/page";
 
 /** 홈 "최근 추가된 게시물" 카드 수. Figma 1:380 기준 3장. */
 const DEFAULT_RECENT_LIMIT = 3;
@@ -140,6 +145,66 @@ function extractPlainText(content: PageContent): string {
 }
 
 /**
+ * 존재하는 항목인가. 아니면 항목 칸에 문구가 붙는 400 이다.
+ *
+ * FK 위반(23503)으로 터뜨리지 않고 미리 짚는다 — 폼에 띄울 문구가 없는 실패이기
+ * 때문이다. 작성·수정이 같은 규칙을 쓴다.
+ */
+async function assertCategoryExists(categoryId: string): Promise<void> {
+  const category = await categoryRepository.findById(categoryId);
+  if (!category) throw new ValidationError({ categoryId: CATEGORY_NOT_FOUND });
+}
+
+/**
+ * 고치거나 지울 수 있는 게시물인가. 아니면 NotFoundError.
+ *
+ * 판정 기준이 isPublic 이 아니라 deletedAt 뿐인 것은 의도다 — 임시저장(DRAFT)은
+ * "공개 화면에 안 보이는 글"이지 "고칠 수 없는 글"이 아니다. 지워진 글만
+ * 대상에서 빠진다.
+ *
+ * 없는 글과 지워진 글을 404 하나로 답하는 것은 getPage 와 같은 이유다
+ * (errors.ts: 삭제 여부가 상태 코드로 새어나가지 않게 한다).
+ */
+async function getEditablePage(id: string): Promise<PageDetail> {
+  const page = await pageRepository.findById(id);
+  if (!page || page.deletedAt !== null) throw new NotFoundError(NOT_FOUND_PAGE);
+  return page;
+}
+
+/**
+ * 수정 직전 상태를 page_revisions 에 남긴다.
+ *
+ * **실패하면 그대로 던진다 — 수정·삭제도 함께 실패한다.** 이 기록은 부가 로그가
+ * 아니라 권한 모델의 한 축이다: 위키는 공동 편집이라 소유권으로 막지 않고
+ * (EDITOR 이상은 남의 글도 고친다) 대신 "누가 언제 무엇을 덮어썼는가"로 추적성을
+ * 확보하기로 했다. 기록이 조용히 빠지면 그 대가 없이 권한만 넓은 상태가 되고,
+ * 더 나쁜 것은 **빠졌다는 사실조차 남지 않는다**는 점이다.
+ *
+ * 실패를 감수하는 비용도 작다. 이 호출은 pages 를 건드리기 **전**이라, 여기서
+ * 던지면 아무것도 바뀌지 않은 상태로 끝난다(부분 성공이 없다). 사용자에게는
+ * 500 과 함께 "다시 시도해주세요"가 가고, 다시 누르면 그만이다.
+ */
+async function snapshot(page: PageDetail, editedBy: string): Promise<void> {
+  await pageRevisionRepository.create({
+    pageId: page.id,
+    title: page.title,
+    content: page.content,
+    editedBy,
+  });
+}
+
+/** 검증을 통과한 폼 입력을 repository 가 받는 모양으로 옮긴다. */
+function toPageData(parsed: ParsedPageForm) {
+  return {
+    categoryId: parsed.categoryId,
+    title: parsed.title,
+    content: parsed.content,
+    plainText: extractPlainText(parsed.content),
+    tags: parsed.tags,
+  };
+}
+
+/**
  * 새 게시물을 발행한다.
  *
  * **권한 검증이 첫 줄이다.** 검증 전에는 아무것도 하지 않는다 — 파싱조차 하지
@@ -159,23 +224,83 @@ export async function createPage(
 ): Promise<Page> {
   assertRole(session, "EDITOR");
 
-  const parsed = parseNewPage(input);
+  const parsed = parsePageForm(input);
   if (!parsed.ok) throw new ValidationError(parsed.errors);
 
-  // FK 위반으로 터뜨리지 않고 미리 짚는다. 23503 은 폼에 띄울 문구가 없는 실패다.
-  const category = await categoryRepository.findById(parsed.value.categoryId);
-  if (!category) throw new ValidationError({ categoryId: CATEGORY_NOT_FOUND });
+  await assertCategoryExists(parsed.value.categoryId);
 
   return pageRepository.create({
-    categoryId: parsed.value.categoryId,
+    ...toPageData(parsed.value),
     // **작성자는 입력이 아니라 세션에서 온다.** 클라이언트가 보낸 작성자 값은
     // 신뢰하지 않는다 — 받으면 남의 이름으로 글을 쓸 수 있다.
     authorId: session.userId,
-    title: parsed.value.title,
-    content: parsed.value.content,
-    plainText: extractPlainText(parsed.value.content),
     status: "PUBLISHED",
     publishedAt: new Date().toISOString(),
-    tags: parsed.value.tags,
   });
+}
+
+// ── 수정 · 삭제 ───────────────────────────────────────────────
+// **소유권을 보지 않는다.** authorId 를 세션과 대조하는 코드는 이 아래 어디에도
+// 없어야 한다. 위키는 공동 편집이 전제라 "내 글"이라는 개념을 두지 않고,
+// EDITOR 이상이면 누가 쓴 글이든 고치고 지운다.
+//
+// 그 대신 값을 치른다: 모든 수정·삭제는 직전 상태를 page_revisions 에 남긴다.
+// 막지 않는 대신 남긴다 — 이게 이 두 함수의 설계 전체다.
+
+/**
+ * 게시물을 고친다.
+ *
+ * 순서에 규칙이 있다.
+ *   ① assertRole   — 첫 줄. 권한 없는 요청에 "제목이 비었습니다"가 나가면
+ *                    그것만으로 어드민 API 의 계약이 새어나간다 (createPage 와 동일).
+ *   ② 대상 확인     — 없거나 지워진 글이면 404.
+ *   ③ 검증          — 작성과 **같은 규칙**(parsePageForm)이다. 두 벌로 짜지 않는다.
+ *   ④ 스냅샷        — 수정 "전" 상태를 기록. 실패하면 여기서 끝난다(아래 설명).
+ *   ⑤ repository    — 실제 수정.
+ *
+ * **④를 ③ 뒤에 둔 것은 의도적인 순서다.** "조회 → 기록 → 검증"으로 두면 형식이
+ * 틀려 400 으로 되돌아갈 요청까지 리비전을 한 줄씩 남긴다. 바뀐 것이 없는데
+ * 스냅샷만 쌓이면 이력이 "무엇이 실제로 바뀌었는가"를 더 이상 답하지 못한다.
+ * 기록의 정본은 여전히 **수정 전 상태**이며(②에서 뜬 값), 실제 수정보다 앞선다.
+ */
+export async function updatePage(
+  session: SessionPayload | null,
+  id: string,
+  input: unknown,
+): Promise<Page> {
+  assertRole(session, "EDITOR");
+
+  const existing = await getEditablePage(id);
+
+  const parsed = parsePageForm(input);
+  if (!parsed.ok) throw new ValidationError(parsed.errors);
+
+  await assertCategoryExists(parsed.value.categoryId);
+
+  // 고친 사람은 원래 작성자가 아니라 지금 요청한 사람이다.
+  await snapshot(existing, session.userId);
+
+  return pageRepository.update(id, toPageData(parsed.value));
+}
+
+/**
+ * 게시물을 지운다 — soft delete 다 (CLAUDE.md: hard delete 금지).
+ *
+ * **삭제도 스냅샷을 남긴다.** 행 자체는 남지만 그건 "지워졌다"는 표시가 붙은
+ * 현재 상태일 뿐이고, 이력이 답해야 하는 질문은 "누가 언제 이 글을 없앴는가"다.
+ * 삭제만 기록에서 빠지면 가장 되돌리기 어려운 변경이 가장 안 남는다.
+ *
+ * 입력이 id 하나뿐이라 검증할 폼이 없다. 대상 확인이 그 자리를 대신한다.
+ */
+export async function deletePage(
+  session: SessionPayload | null,
+  id: string,
+): Promise<void> {
+  assertRole(session, "EDITOR");
+
+  const existing = await getEditablePage(id);
+
+  await snapshot(existing, session.userId);
+
+  await pageRepository.softDelete(id);
 }

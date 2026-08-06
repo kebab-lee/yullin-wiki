@@ -10,7 +10,9 @@ export type {
   PageDetail,
   PageStatus,
   PageSummary,
+  UpdatePageData,
 } from "./page";
+export type { CreatePageRevisionData } from "./pageRevision";
 export type {
   Comment,
   CommentPreview,

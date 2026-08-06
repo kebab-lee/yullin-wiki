@@ -11,22 +11,38 @@ import type {
   PageCreatedBody,
 } from '@/lib/api/types'
 import { contentExtensions } from '@/lib/editor/extensions'
-import type { Category } from '@/lib/types'
+import type { Category, PageDetail } from '@/lib/types'
 import {
-  validateNewPage,
-  type NewPageErrors,
-  type NewPageInput,
+  toEditorContent,
+  validatePageForm,
+  type PageFormErrors,
+  type PageFormInput,
 } from '@/lib/validation/page'
 import EditorToolbar from './EditorToolbar'
 import { createSlashCommand } from './slashCommand'
 
 type SaveStatus = 'idle' | 'saving' | 'saved'
 
+/**
+ * 작성 화면과 수정 화면은 **같은 폼**이다. 채우는 칸도, 검증 규칙도, 저장 후
+ * 가는 곳도 같고 다른 것은 셋뿐이다 — 초기값 · 보낼 곳(POST/PATCH) · 버튼 문구.
+ * 그래서 컴포넌트를 복제하지 않고 mode 로 가른다. 복제하면 태그 입력·이미지
+ * 업로드·검증 연결 같은 덩어리가 두 벌이 되고 한쪽만 고쳐진다.
+ *
+ * edit 일 때 page 가 필수라는 것을 유니온으로 못박는다. `page?: PageDetail` 로
+ * 두면 "수정 화면인데 초기값이 없는" 상태가 타입상 가능해진다.
+ */
+export type PageEditorFormProps =
+  | { mode: 'create' }
+  | { mode: 'edit'; page: PageDetail }
+
 /** 서버가 돌려준 필드 에러 중 이 폼이 아는 칸만 남긴다. */
 const ERROR_FIELDS = ['title', 'categoryId', 'content', 'tags'] as const
 
-function toFieldErrors(fields: Record<string, string> | undefined): NewPageErrors {
-  const errors: NewPageErrors = {}
+function toFieldErrors(
+  fields: Record<string, string> | undefined
+): PageFormErrors {
+  const errors: PageFormErrors = {}
   for (const key of ERROR_FIELDS) {
     const message = fields?.[key]
     if (message) errors[key] = message
@@ -34,24 +50,29 @@ function toFieldErrors(fields: Record<string, string> | undefined): NewPageError
   return errors
 }
 
-export default function WikiEditor() {
+export default function PageEditorForm(props: PageEditorFormProps) {
+  /** 수정 대상. null 이면 작성 화면이다. 분기 조건을 이 값 하나로 모은다. */
+  const initial = props.mode === 'edit' ? props.page : null
+
   const router = useRouter()
   const [categories, setCategories] = useState<Category[]>([])
   // 표시 전용이다. 서버로 보내지 않는다 — authorId 는 세션에서 온다.
-  const [authorName, setAuthorName] = useState('')
-  // 발행 시 pages.category_id 로 그대로 들어갈 값. 표시명이 아니라 id 를 담는다 —
+  // 수정 화면에서는 **원 작성자**를 그린다. 고치는 사람이 작성자를 덮어쓰지
+  // 않기 때문이다 ("누가 고쳤는가"는 page_revisions 가 답한다).
+  const [authorName, setAuthorName] = useState(initial?.authorName ?? '')
+  // 저장 시 pages.category_id 로 그대로 들어갈 값. 표시명이 아니라 id 를 담는다 —
   // 표시명은 바뀔 수 있고, 바뀌면 저장된 값이 어느 항목인지 알 수 없게 된다.
-  const [categoryId, setCategoryId] = useState('')
-  const [tags, setTags] = useState<string[]>([])
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? '')
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
-  const [title, setTitle] = useState('')
+  const [title, setTitle] = useState(initial?.title ?? '')
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
 
-  // 발행 진행 상태와 에러. publishing 은 중복 제출 방지용이다 —
-  // 두 번 눌리면 같은 글이 두 건 생긴다(멱등키가 없다).
-  const [publishing, setPublishing] = useState(false)
-  const [errors, setErrors] = useState<NewPageErrors>({})
-  /** 특정 칸에 붙지 않는 실패(401/403/네트워크)를 담는다. */
+  // 저장 진행 상태와 에러. saving 은 중복 제출 방지용이다 — 작성에서 두 번
+  // 눌리면 같은 글이 두 건 생긴다(멱등키가 없다).
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<PageFormErrors>({})
+  /** 특정 칸에 붙지 않는 실패(401/403/404/네트워크)를 담는다. */
   const [formError, setFormError] = useState<string | null>(null)
 
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -70,7 +91,7 @@ export default function WikiEditor() {
         if (!cancelled) setCategories(body.categories)
       })
       .catch((error) => {
-        console.error('[WikiEditor] 카테고리 조회 실패', error)
+        console.error('[PageEditorForm] 카테고리 조회 실패', error)
       })
 
     return () => {
@@ -78,9 +99,13 @@ export default function WikiEditor() {
     }
   }, [])
 
-  // 작성자 표시용. 저장에는 쓰지 않으므로 실패해도 발행을 막지 않는다 —
-  // 진짜 작성자는 서버가 세션에서 정한다.
+  // 작성자 표시용. 저장에는 쓰지 않으므로 실패해도 저장을 막지 않는다 —
+  // 진짜 작성자는 서버가 세션에서 정한다. 수정 화면은 원 작성자를 이미 props 로
+  // 받았으므로 부르지 않는다.
+  const isEditing = initial !== null
+
   useEffect(() => {
+    if (isEditing) return
     let cancelled = false
 
     fetch('/api/auth/me')
@@ -94,13 +119,13 @@ export default function WikiEditor() {
         if (!cancelled) setAuthorName(body.user.name ?? '')
       })
       .catch((error) => {
-        console.error('[WikiEditor] 사용자 조회 실패', error)
+        console.error('[PageEditorForm] 사용자 조회 실패', error)
       })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isEditing])
 
   const triggerImageUpload = useCallback(() => {
     imageInputRef.current?.click()
@@ -123,6 +148,24 @@ export default function WikiEditor() {
       attributes: { class: 'outline-none min-h-[500px] py-6' },
     },
   })
+
+  /**
+   * 저장된 본문을 에디터에 채운다 (수정 화면).
+   *
+   * 저장된 값을 **그대로** 넣는다. 커스텀 포맷으로 바꿔 넣지 않는다 —
+   * pages.content 는 Tiptap 이 내보낸 ProseMirror 문서 JSON 그 자체이기
+   * 때문이다 (CLAUDE.md "에디터 / 본문 포맷"). toEditorContent 는 도메인 타입
+   * PageContent 를 에디터 타입으로 보는 경계일 뿐 변환기가 아니다.
+   *
+   * editor 가 준비된 뒤에야 넣을 수 있어서 effect 다. 의존성이 editor 와 초기
+   * 본문뿐이라 사용자가 편집하는 동안 다시 돌지 않는다.
+   */
+  const initialContent = initial?.content ?? null
+
+  useEffect(() => {
+    if (!editor || !initialContent) return
+    editor.commands.setContent(toEditorContent(initialContent))
+  }, [editor, initialContent])
 
   // ---- 태그 핸들러 ----
 
@@ -175,55 +218,62 @@ export default function WikiEditor() {
   }
 
   /**
-   * 발행 — POST /api/admin/pages → 성공 시 /pages/[id].
+   * 저장 — 작성은 POST /api/admin/pages, 수정은 PATCH /api/admin/pages/[id].
+   * 둘 다 성공하면 /pages/[id] 로 간다.
    *
    * 클라이언트 검증은 왕복을 아끼는 편의일 뿐이고 진짜 방어선은 service 다.
-   * 그래서 서버와 **같은 함수**(validateNewPage)를 쓴다 — 규칙을 여기 적으면
+   * 그래서 서버와 **같은 함수**(validatePageForm)를 쓴다 — 규칙을 여기 적으면
    * 서버에서 다시 쓰게 되고 두 벌이 조용히 어긋난다.
    *
-   * 본문은 editor.getJSON() 을 그대로 싣는다. 커스텀 포맷으로 변환하지 않는다
-   * (CLAUDE.md "에디터 / 본문 포맷"). 작성자도 싣지 않는다 — 서버가 세션에서 정한다.
+   * 본문은 editor.getJSON() 을 그대로 싣는다. 작성자는 싣지 않는다 — 작성은
+   * 서버가 세션에서 정하고, 수정은 작성자를 아예 건드리지 않는다.
    */
-  const handlePublish = async () => {
-    if (!editor || publishing) return
+  const handleSubmit = async () => {
+    if (!editor || saving) return
 
-    const input: NewPageInput = {
+    const input: PageFormInput = {
       title,
       categoryId,
       content: editor.getJSON(),
       tags,
     }
 
-    const found = validateNewPage(input)
+    const found = validatePageForm(input)
     setErrors(found)
     setFormError(null)
     if (Object.keys(found).length > 0) return
 
-    setPublishing(true)
+    setSaving(true)
 
     try {
-      const response = await fetch('/api/admin/pages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      })
+      const response = await fetch(
+        initial ? `/api/admin/pages/${initial.id}` : '/api/admin/pages',
+        {
+          method: initial ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      )
 
       if (!response.ok) {
-        // 400 은 필드 문구가, 401/403 은 폼 단위 문구만 실려 온다.
+        // 400 은 필드 문구가, 401/403/404 는 폼 단위 문구만 실려 온다.
         const body = await readErrorBody(response)
         setErrors(toFieldErrors(body.fields))
         setFormError(body.message)
-        setPublishing(false)
+        setSaving(false)
         return
       }
 
       const { id } = (await response.json()) as PageCreatedBody
-      // 이동이 끝날 때까지 버튼을 다시 열지 않는다. 여기서 publishing 을 내리면
-      // 화면이 바뀌기 전 짧은 틈에 한 번 더 눌려 같은 글이 두 건 생긴다.
+      // 이동이 끝날 때까지 버튼을 다시 열지 않는다. 여기서 saving 을 내리면
+      // 화면이 바뀌기 전 짧은 틈에 한 번 더 눌린다.
       router.push(`/pages/${id}`)
+      // 상세 화면은 서버 컴포넌트다. 라우터 캐시에 남은 이전 렌더를 버려야
+      // 방금 고친 내용이 보인다 (서버 쪽 캐시는 route handler 가 턴다).
+      router.refresh()
     } catch {
       setFormError(NETWORK_ERROR)
-      setPublishing(false)
+      setSaving(false)
     }
   }
 
@@ -346,28 +396,52 @@ export default function WikiEditor() {
         )}
 
         <div className="ml-auto flex items-center gap-3">
+          {/* 임시저장·미리보기는 작성 화면에만 둔다. 둘 다 아직 로컬 stub 이고
+              (임시저장은 localStorage 키 하나를 쓴다) 이미 저장된 글에 붙이면
+              어느 글의 초안인지 알 수 없는 값이 남는다. */}
+          {!initial && (
+            <>
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={saveStatus === 'saving'}
+                className="px-5 py-2 rounded-full border border-gray2 text-[14px] text-gray3 hover:border-brand-red hover:text-brand-red transition-colors disabled:opacity-50"
+              >
+                {saveStatus === 'saving' ? '저장 중...' : '임시저장'}
+              </button>
+              <button
+                type="button"
+                onClick={handlePreview}
+                className="px-5 py-2 rounded-full border border-gray2 text-[14px] text-gray3 hover:border-brand-red hover:text-brand-red transition-colors"
+              >
+                미리보기
+              </button>
+            </>
+          )}
+
+          {initial && (
+            <button
+              type="button"
+              onClick={() => router.push(`/pages/${initial.id}`)}
+              className="px-5 py-2 rounded-full border border-gray2 text-[14px] text-gray3 hover:border-brand-red hover:text-brand-red transition-colors"
+            >
+              취소
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={handleSaveDraft}
-            disabled={saveStatus === 'saving'}
-            className="px-5 py-2 rounded-full border border-gray2 text-[14px] text-gray3 hover:border-brand-red hover:text-brand-red transition-colors disabled:opacity-50"
-          >
-            {saveStatus === 'saving' ? '저장 중...' : '임시저장'}
-          </button>
-          <button
-            type="button"
-            onClick={handlePreview}
-            className="px-5 py-2 rounded-full border border-gray2 text-[14px] text-gray3 hover:border-brand-red hover:text-brand-red transition-colors"
-          >
-            미리보기
-          </button>
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={publishing}
+            onClick={handleSubmit}
+            disabled={saving}
             className="px-6 py-2 rounded-full bg-brand-red text-white text-[14px] font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {publishing ? '게시 중...' : '게시하기'}
+            {initial
+              ? saving
+                ? '수정 중...'
+                : '수정하기'
+              : saving
+                ? '게시 중...'
+                : '게시하기'}
           </button>
         </div>
       </div>

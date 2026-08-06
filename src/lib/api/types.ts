@@ -52,3 +52,14 @@ export type CurrentUserBody = { user: User };
  * 되돌려 보내는 것은 방금 올린 것을 그대로 다시 내려받는 낭비다.
  */
 export type PageCreatedBody = { id: string };
+
+/**
+ * PATCH /api/admin/pages/[id] — 수정 성공.
+ *
+ * 모양이 PageCreatedBody 와 같지만 별칭으로 합치지 않는다. 두 응답이 우연히
+ * 같을 뿐이고(둘 다 "이동할 곳의 id"만 필요하다), 한쪽이 필드를 늘릴 때
+ * 다른 쪽까지 계약이 끌려가면 안 된다.
+ *
+ * DELETE 는 204 라 바디 타입이 없다.
+ */
+export type PageUpdatedBody = { id: string };

@@ -81,6 +81,30 @@ export interface CreatePageData {
 }
 
 /**
+ * 게시물 한 건을 고칠 때 repository 가 받는 값.
+ *
+ * CreatePageData 에서 **바뀔 수 없는 것**을 뺀 모양이다.
+ *   authorId  — 최초 작성자는 수정으로 바뀌지 않는다. "누가 고쳤는가"는
+ *               pages 가 아니라 page_revisions 가 답한다.
+ *   status / publishedAt — 임시저장이 범위 밖이라 상태 전이가 없다. 여기에
+ *               두면 "공개 여부를 수정 폼이 정한다"는 규칙이 생겨 버린다.
+ *
+ * Partial<Page> 로 두지 않는 이유는 create 와 같다 — 무엇을 반드시 줘야 하는지가
+ * 타입으로 드러나야 하고, 부분 갱신은 "안 보낸 필드는 그대로"라는 규칙을 새로
+ * 만들어 클라이언트가 저장 규칙을 알게 된다.
+ */
+export interface UpdatePageData {
+  categoryId: string;
+
+  title: string;
+  content: PageContent;
+  plainText: string;
+
+  /** 태그 이름. 중복 없이 정리된 상태로 온다고 가정한다 (validation 이 보장). */
+  tags: readonly string[];
+}
+
+/**
  * 상세 화면용 모델 — 게시물 본문 + 화면이 요구하는 주변 정보.
  *
  * Page 를 그대로 쓰지 않는 이유: 상세 헤더(Figma 1:1399)는 태그·작성자·댓글 수를

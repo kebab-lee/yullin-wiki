@@ -18,6 +18,7 @@ import type {
   PageDetail,
   PageStatus,
   PageSummary,
+  UpdatePageData,
 } from "@/lib/types";
 
 import { getSupabase } from "./supabaseClient";
@@ -303,6 +304,59 @@ async function rollbackPage(pageId: string): Promise<void> {
   }
 }
 
+/** 게시물에 걸린 태그 id. 수정 시 되돌릴 재료로 미리 떠 둔다. */
+async function findTagIds(pageId: string): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from(PAGE_TAG_TABLE)
+    .select("tag_id")
+    .eq("page_id", pageId)
+    .returns<{ tag_id: string }[]>();
+
+  if (error) throw new Error(`게시물 태그 조회 실패: ${error.message}`);
+  return (data ?? []).map((row) => row.tag_id);
+}
+
+async function deleteTagLinks(pageId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from(PAGE_TAG_TABLE)
+    .delete()
+    .eq("page_id", pageId);
+
+  if (error) throw new Error(`게시물 태그 해제 실패: ${error.message}`);
+}
+
+async function insertTagLinks(
+  pageId: string,
+  tagIds: readonly string[],
+): Promise<void> {
+  if (tagIds.length === 0) return;
+
+  const { error } = await getSupabase()
+    .from(PAGE_TAG_TABLE)
+    .insert(tagIds.map((tagId) => ({ page_id: pageId, tag_id: tagId })));
+
+  if (error) throw new Error(`게시물 태그 연결 실패: ${error.message}`);
+}
+
+/**
+ * 태그 연결을 예전 상태로 되돌린다. rollbackPage 와 같은 이유로 던지지 않는다 —
+ * 이미 실패한 경로이고, 여기서 또 던지면 원래 원인이 가려진다.
+ */
+async function rollbackTagLinks(
+  pageId: string,
+  tagIds: readonly string[],
+): Promise<void> {
+  try {
+    await deleteTagLinks(pageId);
+    await insertTagLinks(pageId, tagIds);
+  } catch (error) {
+    console.error(
+      `[pageRepository] 태그 보상 복구 실패 (page ${pageId})`,
+      error,
+    );
+  }
+}
+
 /**
  * 게시물 한 건을 만든다.
  *
@@ -331,16 +385,95 @@ export async function create(data: CreatePageData): Promise<Page> {
 
   const page = toPageCore(row);
 
-  if (tagIds.length > 0) {
-    const { error: linkError } = await getSupabase()
-      .from(PAGE_TAG_TABLE)
-      .insert(tagIds.map((tagId) => ({ page_id: page.id, tag_id: tagId })));
-
-    if (linkError) {
-      await rollbackPage(page.id);
-      throw new Error(`게시물 태그 연결 실패: ${linkError.message}`);
-    }
+  try {
+    await insertTagLinks(page.id, tagIds);
+  } catch (linkError) {
+    await rollbackPage(page.id);
+    throw linkError;
   }
 
   return page;
+}
+
+// ── 수정 ──────────────────────────────────────────────────────
+/**
+ * 게시물 한 건을 고친다.
+ *
+ * **되돌리기 전략은 create 와 같은 문제(다중 문장 트랜잭션 부재)에 대한 같은
+ * 답이다.** 다만 되돌릴 대상이 다르다 — create 는 "방금 만든 행을 지우면
+ * 되던" 문제였지만 수정은 지울 수 없고 **예전 값으로 되돌려야** 한다.
+ * 그래서 태그 연결의 예전 상태를 먼저 떠 놓고(previousTagIds) 시작한다.
+ *
+ * 순서와 실패 시 복구 범위:
+ *   ① tags upsert       실패 → 아무것도 안 바뀜. 고아 tags 행은 무해하다(create 와 동일).
+ *   ② 기존 링크 스냅샷   실패 → 아무것도 안 바뀜.
+ *   ③ page_tags 교체     실패 → 예전 링크로 되돌리고 던진다. pages 행은 아직 안 건드렸다.
+ *   ④ pages update       실패 → 예전 링크로 되돌리고 던진다. → 전부 원상복구.
+ *
+ * **여러 문장 중 한 문장만 남는 pages update 를 일부러 마지막에 둔다.** 반대로
+ * 두면(본문 먼저·태그 나중) 태그 교체가 깨졌을 때 본문만 새 값인 상태가 남는데,
+ * 그건 되돌릴 재료(예전 본문)를 repository 가 갖고 있지 않아 복구가 불가능하다.
+ *
+ * 되돌리기가 성립하지 않는 경우는 하나뿐이다: 보상 복구 자체가 실패할 때
+ * (rollbackTagLinks 가 로그만 남긴다). 그때 남는 어긋남은 "본문은 예전 값인데
+ * 태그만 새 값" 이며 화면은 정상 동작한다.
+ *
+ * create 와 마찬가지로 **트랜잭션 경계가 이 함수 안에만 있다.** Java 이관 시
+ * service 메서드에 @Transactional 을 붙이고 아래 보상 코드를 지우면 끝이다.
+ */
+export async function update(
+  id: string,
+  data: UpdatePageData,
+): Promise<Page> {
+  const tagIds = await upsertTags(data.tags);
+  const previousTagIds = await findTagIds(id);
+
+  try {
+    await deleteTagLinks(id);
+    await insertTagLinks(id, tagIds);
+  } catch (linkError) {
+    await rollbackTagLinks(id, previousTagIds);
+    throw linkError;
+  }
+
+  const { data: row, error } = await getSupabase()
+    .from(TABLE)
+    .update({
+      category_id: data.categoryId,
+      title: data.title,
+      content: data.content,
+      plain_text: data.plainText,
+    })
+    .eq("id", id)
+    .select(PAGE_CORE_COLUMNS)
+    .single<PageCoreRow>();
+
+  if (error) {
+    await rollbackTagLinks(id, previousTagIds);
+    throw new Error(`게시물 수정 실패: ${error.message}`);
+  }
+
+  // updated_at 은 set_updated_at() 트리거가 채운다. 여기서 now() 를 적어 넣으면
+  // 정본이 둘이 된다.
+  return toPageCore(row);
+}
+
+// ── 삭제 ──────────────────────────────────────────────────────
+/**
+ * soft delete — deleted_at 에 시각을 찍는다. 행은 지우지 않는다
+ * (CLAUDE.md: hard delete 금지).
+ *
+ * 이 한 컬럼이 공개 노출의 기준이다. 목록 쿼리는 `is("deleted_at", null)` 로
+ * 거르고 상세는 service 의 isPublic 이 같은 값을 본다.
+ *
+ * 이미 삭제된 행을 다시 지워도 조용히 통과한다(멱등). "정말 있는 글인가"는
+ * service 가 먼저 확인하는 질문이라 여기서 또 판정하지 않는다.
+ */
+export async function softDelete(id: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from(TABLE)
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) throw new Error(`게시물 삭제 실패: ${error.message}`);
 }

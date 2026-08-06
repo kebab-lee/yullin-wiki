@@ -111,26 +111,47 @@ export function validateTags(values: readonly string[]): ValidationResult {
   return VALID;
 }
 
+// ── 에디터 경계 ───────────────────────────────────────────────
+/**
+ * 저장된 본문을 Tiptap 에 되돌려 줄 때 쓰는 변환.
+ *
+ * PageContent(도메인 정본, 불투명) → JSONContent(에디터 타입)는 좁히기의 반대
+ * 방향이지만 **경계가 같으므로 같은 파일에 둔다.** 이 파일 밖에서 캐스팅하면
+ * PageContent 의 불투명함을 깨는 지점이 여러 곳으로 늘어난다.
+ *
+ * 변환이 아니라 그냥 통과다 — 저장된 값이 곧 ProseMirror 문서 JSON 이기 때문에
+ * 커스텀 포맷 변환기를 두지 않는다 (CLAUDE.md "에디터 / 본문 포맷").
+ */
+export function toEditorContent(content: PageContent): JSONContent {
+  return content as JSONContent;
+}
+
 // ── 폼 단위 검증 ──────────────────────────────────────────────
 /**
- * 새 게시물 입력. 에디터 폼의 상태이자 곧 POST 바디의 모양이다.
+ * 게시물 폼 입력. 에디터 폼의 상태이자 곧 POST/PATCH 바디의 모양이다.
+ *
+ * **작성과 수정이 같은 타입을 쓴다.** 두 화면이 채우는 칸이 같고 규칙도 같아서,
+ * NewPage / UpdatePage 로 갈라 두면 규칙이 두 벌이 되고 한쪽만 고쳐진다
+ * (CLAUDE.md "검증": 같은 함수를 클라이언트 폼과 service 가 함께 쓴다).
+ * 작성과 수정의 차이는 입력의 모양이 아니라 **무엇을 하는가**이며, 그건
+ * service 가 안다 (작성자·발행 시각은 입력에 없다).
  *
  * content 만 unknown 인 이유: 서버는 이 값을 네트워크에서 받으므로 파싱 전까지
  * 모양을 알 수 없고, 클라이언트는 `editor.getJSON()` 을 그대로 넣기만 하면 된다
  * (JSONContent 는 unknown 에 그대로 들어간다). 양쪽이 같은 타입을 쓴다.
  */
-export type NewPageInput = {
+export type PageFormInput = {
   title: string;
   categoryId: string;
   content: unknown;
   tags: readonly string[];
 };
 
-export type NewPageErrors = Partial<Record<keyof NewPageInput, string>>;
+export type PageFormErrors = Partial<Record<keyof PageFormInput, string>>;
 
-/** 필드별 규칙을 한 번에 돌린다. 통과하면 빈 객체. 에디터 폼이 쓴다. */
-export function validateNewPage(input: NewPageInput): NewPageErrors {
-  return collectErrors<keyof NewPageInput>({
+/** 필드별 규칙을 한 번에 돌린다. 통과하면 빈 객체. 작성·수정 폼이 같이 쓴다. */
+export function validatePageForm(input: PageFormInput): PageFormErrors {
+  return collectErrors<keyof PageFormInput>({
     title: errorOf(validateTitle(input.title)),
     categoryId: errorOf(validateCategoryId(input.categoryId)),
     content: errorOf(validateContent(input.content)),
@@ -138,17 +159,17 @@ export function validateNewPage(input: NewPageInput): NewPageErrors {
   });
 }
 
-/** 검증을 통과한 새 게시물 입력. content 가 도메인 타입으로 좁혀져 있다. */
-export type ParsedNewPageInput = {
+/** 검증을 통과한 게시물 폼 입력. content 가 도메인 타입으로 좁혀져 있다. */
+export type ParsedPageForm = {
   title: string;
   categoryId: string;
   content: PageContent;
   tags: readonly string[];
 };
 
-export type NewPageParseResult =
-  | { readonly ok: true; readonly value: ParsedNewPageInput }
-  | { readonly ok: false; readonly errors: NewPageErrors };
+export type PageFormParseResult =
+  | { readonly ok: true; readonly value: ParsedPageForm }
+  | { readonly ok: false; readonly errors: PageFormErrors };
 
 /** 임의의 값에서 문자열만 안전하게 꺼낸다. 아니면 빈 문자열 → 검증이 걸러낸다. */
 function readString(source: Record<string, unknown>, key: string): string {
@@ -179,24 +200,24 @@ function readTags(value: unknown): string[] {
 /**
  * 폼과 똑같은 규칙으로 검증하되, 통과한 입력을 도메인 값으로 좁혀서 돌려준다.
  *
- * 바디를 unknown 으로 받는다. Route Handler 가 `as NewPageInput` 같은 캐스팅으로
+ * 바디를 unknown 으로 받는다. Route Handler 가 `as PageFormInput` 같은 캐스팅으로
  * 모양을 단정하면 검증 이전에 거짓말이 한 번 들어가는 셈이고, 그 캐스팅은
  * 라우트마다 복붙된다. 좁히기를 검증과 같은 자리에서 끝낸다.
  */
-export function parseNewPage(body: unknown): NewPageParseResult {
+export function parsePageForm(body: unknown): PageFormParseResult {
   const source: Record<string, unknown> =
     typeof body === "object" && body !== null
       ? (body as Record<string, unknown>)
       : {};
 
-  const input: NewPageInput = {
+  const input: PageFormInput = {
     title: readString(source, "title"),
     categoryId: readString(source, "categoryId"),
     content: source.content,
     tags: readTags(source.tags),
   };
 
-  const errors = validateNewPage(input);
+  const errors = validatePageForm(input);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   // validateContent 를 통과했으므로 doc 이다. 그 사실을 타입으로 옮기는 캐스팅이
