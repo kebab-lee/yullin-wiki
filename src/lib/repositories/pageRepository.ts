@@ -11,6 +11,7 @@
 // 실린다.
 // =============================================================
 
+import { cutAroundQuery, EXCERPT_LENGTH } from "@/lib/search/excerpt";
 import type {
   CreatePageData,
   Page,
@@ -26,6 +27,9 @@ import { getSupabase } from "./supabaseClient";
 const TABLE = "pages";
 const TAG_TABLE = "tags";
 const PAGE_TAG_TABLE = "page_tags";
+
+/** 검색 RPC (supabase/migrations/20260807000000_search_pages.sql). */
+const SEARCH_FUNCTION = "search_pages";
 
 /**
  * 목록용 select. content 가 빠져 있는 것이 핵심이다.
@@ -54,8 +58,8 @@ const PAGE_COLUMNS =
 const PAGE_CORE_COLUMNS =
   "id, category_id, author_id, title, content, plain_text, status, published_at, created_at, updated_at, deleted_at";
 
-/** 카드 미리보기 길이. 넘으면 잘라내고 말줄임표를 붙인다. */
-const EXCERPT_LENGTH = 120;
+// 카드 미리보기 길이(EXCERPT_LENGTH)는 lib/search/excerpt 가 정본이다. 목록 카드와
+// 검색 결과가 서로 다른 길이로 잘리면 같은 목록 폭에서 줄 수가 달라진다.
 
 /**
  * Postgres invalid_text_representation. uuid 컬럼에 uuid 가 아닌 문자열을
@@ -197,6 +201,33 @@ export type Pagination = {
 };
 
 /**
+ * 공개 게시물 전체의 한 페이지 + 전체 건수.
+ *
+ * findRecent 와 조건은 같고 자르는 방식만 다르다(limit vs range + count).
+ * 둘을 한 함수로 합치지 않는 이유는 홈 카드에는 total 이 필요 없고,
+ * `count: "exact"` 는 매 요청마다 전체 건수를 세는 비용이 붙기 때문이다.
+ */
+export async function findAllPaged(
+  { page, size }: Pagination,
+): Promise<{ items: PageSummary[]; total: number }> {
+  const from = (page - 1) * size;
+
+  const { data, count, error } = await getSupabase()
+    .from(TABLE)
+    .select(SUMMARY_COLUMNS, { count: "exact" })
+    .eq("status", "PUBLISHED")
+    .is("deleted_at", null)
+    .eq("comments.status", "VISIBLE")
+    .order("published_at", { ascending: false })
+    .range(from, from + size - 1)
+    .returns<PageSummaryRow[]>();
+
+  if (error) throw new Error(`게시물 목록 조회 실패: ${error.message}`);
+
+  return { items: (data ?? []).map(toSummary), total: count ?? 0 };
+}
+
+/**
  * 카테고리별 공개 게시물 한 페이지 + 전체 건수.
  *
  * 조회 키가 표시명이 아니라 slug 다 (CLAUDE.md "분기 조건에 표시명을 쓰지 않는다").
@@ -227,6 +258,76 @@ export async function findByCategorySlug(
   if (error) throw new Error(`카테고리 게시물 조회 실패: ${error.message}`);
 
   return { items: (data ?? []).map(toSummary), total: count ?? 0 };
+}
+
+/**
+ * 검색 RPC 가 돌려주는 행.
+ *
+ * PostgREST 임베디드 조회(page_tags(tags(name)))가 아니라 SQL 이 이미 평평하게
+ * 편 모양이라 PageSummaryRow 와 다르다. tags 는 text[], 댓글 수는 스칼라다.
+ * 그래서 toSummary 를 재사용하지 않고 별도 변환을 둔다 — 두 모양을 하나의
+ * 변환 함수에 옵션으로 우겨넣으면 어느 쪽이 정본인지 알 수 없게 된다.
+ */
+type PageSearchRow = {
+  id: string;
+  title: string;
+  category_id: string;
+  plain_text: string;
+  published_at: string | null;
+  tags: string[] | null;
+  comment_count: number;
+  /** 잘라내기 전 전체 건수. 모든 행에 같은 값이 실린다 (count(*) over ()). */
+  total_count: number;
+};
+
+/**
+ * 공개 게시물 트라이그램 검색 한 페이지 + 전체 건수.
+ *
+ * **질의를 PostgREST 로 조립하지 않고 RPC 를 부른다.** 유사도 정렬(제목 가중치)은
+ * select 절의 계산식을 order by 가 참조해야 하는데 REST 문법에 그 자리가 없다.
+ * TS 로 정렬하면 정렬 전에 전체 후보를 다 실어 와야 해서 페이지네이션과 total 이
+ * 성립하지 않는다. 함수 본문은 Java 이관 시 그대로 native query 가 된다.
+ * 임계값·가중치의 근거는 마이그레이션 파일 주석에 있다.
+ *
+ * 발췌를 여기서 만드는 것이 목록 조회와 다른 점이다. 목록은 본문 앞 120자를
+ * 자르면 되지만(toExcerpt) 검색 결과는 **검색어가 보이는 자리**를 잘라야
+ * "왜 이 글이 결과에 있는가"가 화면에 드러난다. 자르는 위치가 질의에 달렸으므로
+ * 질의를 아는 이 자리에서 자른다 — 대신 plain_text 전체가 API 응답으로 새어
+ * 나가지 않는다.
+ */
+export async function search(
+  query: string,
+  { page, size }: Pagination,
+): Promise<{ items: PageSummary[]; total: number }> {
+  const { data, error } = await getSupabase().rpc(SEARCH_FUNCTION, {
+    p_query: query,
+    p_limit: size,
+    p_offset: (page - 1) * size,
+  });
+
+  if (error) throw new Error(`게시물 검색 실패: ${error.message}`);
+
+  // 테이블 조회의 `.returns<T[]>()` 를 쓸 수 없다 — 스키마 타입을 생성해 두지
+  // 않은 클라이언트에서 rpc 의 반환은 단건으로 추론되고, 그 위에 배열 타입을
+  // 얹는 것을 드라이버 타입이 막는다. row 모양을 좁히는 것은 어차피 이 레이어의
+  // 책임이므로 여기서 한 번만 단언한다(밖으로는 도메인 모델만 나간다).
+  const rows: PageSearchRow[] = Array.isArray(data)
+    ? (data as PageSearchRow[])
+    : [];
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      categoryId: row.category_id,
+      tags: row.tags ?? [],
+      excerpt: cutAroundQuery(row.plain_text, query, EXCERPT_LENGTH),
+      commentCount: row.comment_count,
+      publishedAt: row.published_at,
+    })),
+    // 결과가 없으면 실어 올 행이 없으므로 total 도 0 이다.
+    total: rows[0]?.total_count ?? 0,
+  };
 }
 
 /**

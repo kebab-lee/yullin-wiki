@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import AuthActionButton from "@/components/common/AuthActionButton";
 import type { Role } from "@/lib/auth/roles";
-import HeaderSearchBox from "./HeaderSearchBox";
+import SearchInput from "@/components/common/SearchInput";
 
 /**
  * 관리자 헤더 뷰 — Figma `AdHeader` 1:1680.
@@ -37,7 +37,7 @@ export default function AdminHeaderView({ role }: { role: Role }) {
             </span>
           </Link>
 
-          <HeaderSearchBox />
+          <SearchInput variant="header" />
         </div>
 
         {/* 우: 프로필 + 로그아웃 */}

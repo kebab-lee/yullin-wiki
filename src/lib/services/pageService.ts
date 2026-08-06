@@ -21,6 +21,7 @@ import {
   parsePageForm,
   type ParsedPageForm,
 } from "@/lib/validation/page";
+import { validateSearchQuery } from "@/lib/validation/search";
 
 /** 홈 "최근 추가된 게시물" 카드 수. Figma 1:380 기준 3장. */
 const DEFAULT_RECENT_LIMIT = 3;
@@ -70,6 +71,38 @@ export async function listRecentPages(limit?: number): Promise<PageSummary[]> {
 }
 
 /**
+ * 한 페이지의 크기·번호를 안전한 값으로 접는다.
+ *
+ * 전체 목록과 항목별 목록이 **같은 규칙을 쓴다.** 두 곳에 따로 적으면
+ * 한쪽만 상한이 고쳐져서 같은 화면의 두 목록이 다르게 잘린다.
+ */
+function toPageWindow(pagination: { page?: number; size?: number }): {
+  page: number;
+  size: number;
+} {
+  return {
+    page: positiveInt(pagination.page, 1),
+    size: boundedSize(pagination.size, DEFAULT_PAGE_SIZE),
+  };
+}
+
+/**
+ * 공개 게시물 전체 목록 (`/pages`).
+ *
+ * 홈의 "최근 추가된 게시물 → 더보기"가 오는 곳이라 정렬은 listRecentPages 와
+ * 같은 최신순이다. 다른 것은 페이지네이션이 붙는다는 점뿐이다 — 그래서 별도
+ * 정렬 규칙을 두지 않는다.
+ */
+export async function listPages(
+  pagination: { page?: number; size?: number } = {},
+): Promise<{ items: PageSummary[]; total: number; page: number; size: number }> {
+  const window = toPageWindow(pagination);
+  const { items, total } = await pageRepository.findAllPaged(window);
+
+  return { items, total, ...window };
+}
+
+/**
  * 카테고리 한 항목의 공개 게시물 목록.
  *
  * 없는 slug 는 빈 목록이 아니라 NotFoundError 다 — 오타 난 URL 이 "글이 아직
@@ -83,15 +116,51 @@ export async function listPagesByCategory(
   const category = await categoryRepository.findBySlug(slug);
   if (!category) throw new NotFoundError(NOT_FOUND_CATEGORY);
 
-  const page = positiveInt(pagination.page, 1);
-  const size = boundedSize(pagination.size, DEFAULT_PAGE_SIZE);
+  const window = toPageWindow(pagination);
 
-  const { items, total } = await pageRepository.findByCategorySlug(slug, {
-    page,
-    size,
-  });
+  const { items, total } = await pageRepository.findByCategorySlug(slug, window);
 
-  return { items, total, page, size };
+  return { items, total, ...window };
+}
+
+/**
+ * 게시물 검색 (`/search`).
+ *
+ * **권한 검증이 없다. assertRole 을 넣지 마라** — 검색은 비로그인 사용자도 쓰는
+ * 공개 기능이고, 대상은 이미 공개 게시물뿐이다(DRAFT·삭제분은 질의에서 빠진다).
+ * 여기에 역할 검사를 붙이면 홈 히어로의 검색창이 로그인 벽을 만나게 된다.
+ *
+ * **검색어가 규칙에 어긋나면 빈 결과가 아니라 ValidationError 다.** 빈 목록으로
+ * 답하면 "그런 글이 없다"와 "그렇게는 검색할 수 없다"가 화면에서 같은 모양이 되고,
+ * 사용자는 한 글자 더 쓰면 결과가 나온다는 사실을 알 수 없다. 필드명을 `q` 로
+ * 두는 것은 쿼리스트링 이름과 같게 하기 위함이다 — 화면이 어느 입력 칸에 문구를
+ * 붙일지 그대로 안다.
+ *
+ * 검색어를 여기서 trim 해서 repository 로 넘긴다. 앞뒤 공백은 트라이그램 집합을
+ * 바꿔 유사도를 떨어뜨리는데, 그건 사용자가 의도한 검색어가 아니다.
+ */
+export async function searchPages(
+  query: string,
+  pagination: { page?: number; size?: number } = {},
+): Promise<{
+  items: PageSummary[];
+  total: number;
+  page: number;
+  size: number;
+  query: string;
+}> {
+  const keyword = query.trim();
+
+  const result = validateSearchQuery(keyword);
+  if (!result.valid) throw new ValidationError({ q: result.message });
+
+  const window = toPageWindow(pagination);
+  const { items, total } = await pageRepository.search(keyword, window);
+
+  // 실제로 검색한 문자열을 되돌려준다. 화면 제목("검색어" 전체 검색 결과)이
+  // 요청한 원문 대신 서버가 쓴 값을 그리도록 — 둘이 어긋나면 결과와 제목이
+  // 다른 것을 가리킨다.
+  return { items, total, ...window, query: keyword };
 }
 
 /**

@@ -2,7 +2,9 @@
 // pages 도메인 모델
 //
 // DB 컬럼(snake_case) → camelCase 변환은 repository의 책임이다.
-// pages.search_text는 generated column이라 DB 내부 검색용이며 도메인에 노출하지 않는다.
+// 검색은 title / plain_text 각각의 트라이그램 인덱스를 쓴다. 둘을 합쳐 두었던
+// generated column(search_text)은 제목 가중치를 줄 수 없어 제거했다
+// (supabase/migrations/20260807000000_search_pages.sql).
 // =============================================================
 
 /** pages.status — varchar + CHECK. Java에서는 @Enumerated(EnumType.STRING). */

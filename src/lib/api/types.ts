@@ -28,8 +28,16 @@ export type CategoryListBody = { categories: Category[] };
 /** GET /api/pages?limit= — 최근 게시물. 페이지네이션이 없어 total 도 없다. */
 export type RecentPageListBody = { pages: PageSummary[] };
 
-/** GET /api/pages?category=&page=&size= */
-export type CategoryPageListBody = {
+/**
+ * GET /api/pages?page=&size= — 페이지네이션이 붙은 게시물 목록.
+ * `category=` 가 함께 오면 그 항목으로 좁혀진 목록이고, 없으면 전체다.
+ *
+ * 두 목록이 **같은 타입을 쓰는 것은 의도다.** 전체(`/pages`)와 항목별
+ * (`/categories/[slug]`)은 조건만 다른 같은 컬렉션이고, 화면도 같은
+ * 컴포넌트(PageList)로 그린다. 타입을 갈라 두면 그 컴포넌트가 둘 중
+ * 하나를 골라야 하거나 유니온을 받아야 한다.
+ */
+export type PagedPageListBody = {
   pages: PageSummary[];
   /** 조건에 맞는 전체 건수. 마지막 페이지 계산에 쓴다. */
   total: number;
@@ -37,6 +45,20 @@ export type CategoryPageListBody = {
   page: number;
   size: number;
 };
+
+/**
+ * GET /api/pages/search?q=&page=&size= — 검색 결과.
+ *
+ * PagedPageListBody 를 그대로 쓰지 않고 `query` 를 더한 별도 타입이다. 검색
+ * 화면의 제목이 "검색어"를 그려야 하는데, 그 값은 URL 이 아니라 **서버가 실제로
+ * 검색에 쓴 문자열**이어야 한다(앞뒤 공백이 접힌다). page/size 를 되돌려주는 것과
+ * 같은 이유다 — 요청값이 아니라 적용값이 화면의 정본이다.
+ *
+ * pages 의 excerpt 는 목록과 달리 **검색어가 보이는 자리**가 잘려 온다.
+ * 타입이 같아도 내용의 규칙이 다르다는 점에서, 두 응답을 한 타입으로 합치면
+ * 이 차이가 계약에서 사라진다.
+ */
+export type PageSearchListBody = PagedPageListBody & { query: string };
 
 /** GET /api/pages/[id] — 상세. 여기서만 content(ProseMirror JSON)가 실린다. */
 export type PageDetailBody = { page: PageDetail };

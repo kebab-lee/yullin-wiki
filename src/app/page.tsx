@@ -1,5 +1,5 @@
 import HeroHeaderBar from "@/components/home/HeroHeaderBar";
-import SearchBox from "@/components/home/SearchBox";
+import SearchInput from "@/components/common/SearchInput";
 import LinkBadge from "@/components/home/LinkBadge";
 import CategoryButtonRow from "@/components/home/CategoryButtonRow";
 import RecentPostCard from "@/components/home/RecentPostCard";
@@ -68,7 +68,7 @@ export default async function HomePage() {
             </div>
 
             {/* 검색창 */}
-            <SearchBox />
+            <SearchInput variant="hero" />
           </div>
 
           {/* 외부 링크 영역 */}

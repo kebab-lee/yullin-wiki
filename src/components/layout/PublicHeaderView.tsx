@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import AuthActionButton from "@/components/common/AuthActionButton";
 import type { ViewerRole } from "@/lib/types";
-import HeaderSearchBox from "./HeaderSearchBox";
+import SearchInput from "@/components/common/SearchInput";
 
 /**
  * 유저(비로그인 포함) 헤더 뷰 — Figma `Header` 1:433.
@@ -33,7 +33,7 @@ export default function PublicHeaderView({ role }: { role: ViewerRole }) {
             </span>
           </Link>
 
-          <HeaderSearchBox />
+          <SearchInput variant="header" />
         </div>
 
         {/* 우: 로그인 여부에 따라 교체 */}
