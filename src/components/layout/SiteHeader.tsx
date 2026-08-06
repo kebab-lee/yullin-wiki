@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import type { ViewerRole } from "@/lib/types";
 
 import AdminHeaderView from "./AdminHeaderView";
@@ -11,8 +12,11 @@ import PublicHeaderView from "./PublicHeaderView";
  * 이 컴포넌트와 하위 뷰는 변경되지 않는다.
  */
 export function SiteHeader({ role }: { role: ViewerRole }) {
-  if (role === "ADMIN") {
-    return <AdminHeaderView />;
+  // 관리 화면(/admin)에 들어갈 수 있는 사람에게 관리자 헤더를 준다.
+  // 기준을 EDITOR 로 둔 것은 페이지 가드(requireRole("EDITOR"))와 같은 선이다 —
+  // 헤더에 메뉴가 없는데 화면은 열리는(또는 그 반대) 어긋남을 막는다.
+  if (role !== "GUEST" && hasRole(role, "EDITOR")) {
+    return <AdminHeaderView role={role} />;
   }
 
   return <PublicHeaderView role={role} />;

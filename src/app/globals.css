@@ -160,3 +160,125 @@ body {
 .wiki-editor .ProseMirror img.ProseMirror-selectednode {
   outline: 2px solid rgb(var(--color-brand-red));
 }
+
+/* ── Wiki Article (읽기 전용 본문) ──────────────────────────────
+   .wiki-editor 와 같은 본문을 그리지만 클래스를 나눈다. 에디터 쪽 규칙은
+   .ProseMirror 에 매달려 있어 서버가 만든 정적 HTML 에는 붙지 않고, 편집용
+   여백(min-height, 커서 여유)이 읽기 화면에는 필요 없기 때문이다.
+
+   간격은 Figma Article(1:1330) 주석 그대로:
+     대제목 간 35 / 소제목 간 25 / 제목과 본문 간 15
+   ============================================================= */
+
+.wiki-article {
+  padding-top: 40px;
+}
+
+/* 목차 앵커로 뛰었을 때 제목이 뷰포트 맨 위에 딱 붙지 않게 띄운다. */
+.wiki-article h1,
+.wiki-article h2,
+.wiki-article h3 {
+  scroll-margin-top: 40px;
+}
+
+/* 대제목 — 아래 구분선은 시안의 800폭 라인이다 */
+.wiki-article h1 {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 30px;
+  margin: 35px 0 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgb(var(--color-gray2));
+}
+.wiki-article h1:first-child {
+  margin-top: 0;
+}
+
+/* 소제목 */
+.wiki-article h2 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 25px;
+  margin: 25px 0 15px;
+}
+.wiki-article h3 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 20px 0 15px;
+}
+
+.wiki-article p {
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.85;
+  margin: 6px 0;
+}
+
+.wiki-article blockquote {
+  border-left: 4px solid rgb(var(--color-brand-red));
+  padding-left: 16px;
+  margin: 16px 0;
+  color: rgb(var(--color-gray4));
+}
+
+.wiki-article ul {
+  list-style-type: disc;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.wiki-article ol {
+  list-style-type: decimal;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.wiki-article li {
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.85;
+}
+.wiki-article li > p {
+  margin: 2px 0;
+}
+
+.wiki-article strong { font-weight: 700; }
+.wiki-article em { font-style: italic; }
+.wiki-article s { text-decoration: line-through; }
+.wiki-article u { text-decoration: underline; }
+
+.wiki-article a {
+  color: rgb(var(--color-brand-red));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wiki-article hr {
+  border: 0;
+  border-top: 1px solid rgb(var(--color-gray2));
+  margin: 24px 0;
+}
+
+.wiki-article pre {
+  background: rgb(var(--color-brand-red-white));
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.wiki-article code {
+  font-size: 14px;
+}
+
+/* 이미지 — 시안대로 중앙 정렬.
+   시안의 "이미지 아래 캡션 15px" 은 아직 구현하지 않았다. Tiptap 기본 Image
+   노드는 <img> 하나만 내보내고 캡션을 담을 자리가 없어서, 캡션을 그리려면
+   figure/figcaption 스키마를 에디터와 렌더러 양쪽에 같이 넣어야 한다.
+   에디터에 캡션 입력 UI 가 생길 때 함께 추가한다. */
+.wiki-article img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 24px auto 0;
+  display: block;
+}

@@ -3,7 +3,14 @@ export type { ViewerRole } from "./auth";
 export type { Gender, Role, User, UserStatus } from "./user";
 export { GENDERS, GENDER_LABEL, ROLES, isGender, isRole } from "./user";
 export type { Category } from "./category";
-export type { Page, PageContent, PagePreview, PageStatus } from "./page";
+export type {
+  CreatePageData,
+  Page,
+  PageContent,
+  PageDetail,
+  PageStatus,
+  PageSummary,
+} from "./page";
 export type {
   Comment,
   CommentPreview,

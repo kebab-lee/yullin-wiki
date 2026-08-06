@@ -7,6 +7,7 @@
 //   ValidationError   → 400
 //   UnauthorizedError → 401
 //   ForbiddenError    → 403
+//   NotFoundError     → 404
 //   ConflictError     → 409
 //   그 외             → 500 (내부 사정은 클라이언트에 노출하지 않는다)
 // =============================================================
@@ -17,6 +18,7 @@ import type { ApiErrorBody } from "@/lib/api/types";
 import {
   ConflictError,
   ForbiddenError,
+  NotFoundError,
   UnauthorizedError,
   ValidationError,
 } from "@/lib/errors";
@@ -38,6 +40,10 @@ export function handleError(error: unknown): NextResponse<ApiErrorBody> {
 
   if (error instanceof ForbiddenError) {
     return NextResponse.json({ message: error.message }, { status: 403 });
+  }
+
+  if (error instanceof NotFoundError) {
+    return NextResponse.json({ message: error.message }, { status: 404 });
   }
 
   if (error instanceof ConflictError) {

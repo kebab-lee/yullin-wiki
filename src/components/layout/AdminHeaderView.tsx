@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import AuthActionButton from "@/components/common/AuthActionButton";
+import type { Role } from "@/lib/auth/roles";
 import HeaderSearchBox from "./HeaderSearchBox";
 
 /**
@@ -9,8 +10,11 @@ import HeaderSearchBox from "./HeaderSearchBox";
  *
  * SiteHeader 를 통해서만 렌더된다. 어드민 전용 레이아웃을 따로 두지 않는다.
  * 유저 헤더와의 차이는 "관리자" 라벨과 로고 링크 대상뿐이다.
+ *
+ * role 을 받아 그대로 내려보낸다. 여기서 "ADMIN" 을 박아 넣으면 EDITOR 가
+ * 볼 때 거짓말이 된다 — 이 헤더는 EDITOR 이상이면 그려진다.
  */
-export default function AdminHeaderView() {
+export default function AdminHeaderView({ role }: { role: Role }) {
   return (
     <header className="w-full bg-white h-[135px] overflow-hidden">
       {/* Figma: 1512 프레임 안에서 좌우 209px 여백 → 1094px 중앙 정렬, 상단 71px */}
@@ -41,7 +45,7 @@ export default function AdminHeaderView() {
           <Link href="/admin/mypage" aria-label="마이페이지" className="block shrink-0">
             <Image src="/icons/profile.svg" alt="" width={30} height={30} />
           </Link>
-          <AuthActionButton role="ADMIN" />
+          <AuthActionButton role={role} />
         </div>
       </div>
     </header>

@@ -1,12 +1,15 @@
 // =============================================================
 // 인증 도메인 모델
 //
-// 저장되는 역할 값(USER / ADMIN)의 정본은 users.role 이고,
-// 타입도 사용자 도메인이 소유한다 (types/user.ts 의 `Role`).
+// 저장되는 역할 값(USER / EDITOR / ADMIN)의 정본은 users.role 이고,
+// 타입과 서열은 권한 레이어가 소유한다 (auth/roles.ts 의 `Role` / `ROLE_LEVEL`).
 // 이 파일은 거기에 "로그인하지 않은 방문자"를 더한 화면용 타입만 얹는다.
+//
+// GUEST 는 서열에 넣지 않는다. ROLE_LEVEL 에 GUEST: -1 을 끼우면 hasRole 이
+// 저장 불가능한 값까지 받게 되고, 그 순간 DB 값 목록과 화면 상태가 뒤섞인다.
 // =============================================================
 
-import type { Role } from "./user";
+import type { Role } from "@/lib/auth/roles";
 
 /**
  * 화면 권한 구분.

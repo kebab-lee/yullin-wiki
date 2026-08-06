@@ -6,31 +6,20 @@
 // @Enumerated(EnumType.STRING) 로 같은 값을 쓴다.
 //
 // DB 컬럼(snake_case) → camelCase 변환은 repository 의 책임이다.
+//
+// role 만 여기에 정의가 없다. 값에 더해 "서열"이라는 규칙이 붙는 순간
+// 권한 레이어의 것이 되므로 auth/roles.ts 가 소유하고, 여기서는 다시
+// 내보내기만 한다. 두 곳에 적으면 역할이 늘 때 한쪽만 고쳐진다.
 // =============================================================
+
+import type { Role } from "@/lib/auth/roles";
+
+export type { Role } from "@/lib/auth/roles";
+export { ROLES, isRole } from "@/lib/auth/roles";
 
 export type Gender = "MALE" | "FEMALE";
 
 export type UserStatus = "ACTIVE" | "BLOCKED" | "WITHDRAWN";
-
-/**
- * users.role 에 실제로 저장되는 값.
- *
- * 화면에서 쓰는 "로그인 안 한 방문자(GUEST)"는 DB 값이 아니므로 여기 없다.
- * 그쪽은 `ViewerRole` (types/auth.ts) 이다.
- */
-export type Role = "USER" | "ADMIN";
-
-export const ROLES: readonly Role[] = ["USER", "ADMIN"];
-
-/**
- * 임의의 값이 Role 인가.
- *
- * JWT payload 처럼 밖에서 들어온 unknown 을 좁힐 때 쓴다 — 서명이 유효해도
- * 안에 든 role 값까지 믿지는 않는다.
- */
-export function isRole(value: unknown): value is Role {
-  return typeof value === "string" && (ROLES as readonly string[]).includes(value);
-}
 
 export const GENDERS: readonly Gender[] = ["FEMALE", "MALE"];
 

@@ -5,70 +5,31 @@ import CategoryButtonRow from "@/components/home/CategoryButtonRow";
 import RecentPostCard from "@/components/home/RecentPostCard";
 import SectionHeader from "@/components/home/SectionHeader";
 import MoreButton from "@/components/common/MoreButton";
+import { REVALIDATE } from "@/lib/api/baseUrl";
+import { fetchApi } from "@/lib/api/serverFetch";
+import type { CategoryListBody, RecentPageListBody } from "@/lib/api/types";
 import { getViewerRole } from "@/lib/auth/viewer";
-import type { Category, PagePreview } from "@/lib/types";
 
-// TODO: GET /api/categories 연동 시 제거
-// 값은 supabase/migrations/20260804000000_init.sql 의 seed와 동일하다.
-const CATEGORIES: Category[] = [
-  {
-    id: "1",
-    slug: "space",
-    name: "공간",
-    fullName: "열린교회 속 공간",
-    icon: "⛪️",
-    sortOrder: 1,
-  },
-  {
-    id: "2",
-    slug: "serving",
-    name: "섬김",
-    fullName: "열린교회 내 섬김",
-    icon: "🤲",
-    sortOrder: 2,
-  },
-  {
-    id: "3",
-    slug: "youth",
-    name: "열청",
-    fullName: "열린교회 청년부",
-    icon: "🌱",
-    sortOrder: 3,
-  },
-];
-
-// TODO: GET /api/pages?sort=recent&limit=3 연동 시 제거
-const RECENT_POSTS: PagePreview[] = [
-  {
-    id: "1",
-    title: "게시물 제목",
-    tags: ["태그1", "태그2", "태그3"],
-    content:
-      "미리보기에 나타날 몇 줄 게시물 내용 미리보기에 나타날 몇 줄 게시물 내용 미리보기에 나타날 몇 줄 게시물 내용",
-    commentCount: 0,
-  },
-  {
-    id: "2",
-    title: "게시물 제목이 길어진다면 이런식",
-    tags: ["태그1", "태그2", "태그3"],
-    content:
-      "미리보기에 나타날 몇 줄 게시물 내용 미리보기에 나타날 몇 줄 게시물 내용 미리보기에 나타날 몇 줄 게시물 내용",
-    commentCount: 1,
-  },
-  {
-    id: "3",
-    title: "게시물 제목이 세 줄 이상이라면",
-    tags: ["태그1", "태그2", "태그3"],
-    content:
-      "미리보기에 나타날 몇 줄 게시물 내용 미리보기에 나타날 몇 줄 게시물 내용 미리보기에 나타날 몇 줄 게시물 내용",
-    commentCount: 3,
-  },
-];
+/** Figma 1:380 기준 카드 3장. */
+const RECENT_LIMIT = 3;
 
 export default async function HomePage() {
   // 홈은 (site) 그룹 밖이라 layout 의 헤더를 받지 않는다.
   // HeroHeaderBar 가 헤더를 겸하므로 role 도 여기서 직접 읽는다.
-  const role = await getViewerRole();
+  //
+  // 데이터는 service 를 직접 부르지 않고 자기 Route Handler 를 거친다
+  // (CLAUDE.md "레이어 규칙"). 두 요청은 서로를 기다릴 이유가 없어 같이 띄운다.
+  const [role, categoryBody, recentBody] = await Promise.all([
+    getViewerRole(),
+    fetchApi<CategoryListBody>("/api/categories", REVALIDATE.categories),
+    fetchApi<RecentPageListBody>(
+      `/api/pages?limit=${RECENT_LIMIT}`,
+      REVALIDATE.pages,
+    ),
+  ]);
+
+  const categories = categoryBody.categories;
+  const recentPages = recentBody.pages;
 
   return (
     // 홈은 (site) route group 밖이라 SiteHeader 를 받지 않는다.
@@ -133,7 +94,7 @@ export default async function HomePage() {
           {/* 항목별 둘러보기 (Figma 1:367, h=110) */}
           <div className="flex h-[110px] items-center justify-between">
             <SectionHeader emoji="📂" title="항목별로 둘러보기" href="/categories" />
-            <CategoryButtonRow categories={CATEGORIES} />
+            <CategoryButtonRow categories={categories} />
             <MoreButton href="/categories" />
           </div>
 
@@ -142,9 +103,15 @@ export default async function HomePage() {
             <SectionHeader emoji="⏰" title="최근 추가된 게시물" href="/pages" />
 
             <div className="flex items-center gap-[25px]">
-              {RECENT_POSTS.map((post) => (
-                <RecentPostCard key={post.id} page={post} />
-              ))}
+              {recentPages.length === 0 ? (
+                <p className="text-[16px] text-gray3">
+                  아직 등록된 게시물이 없습니다.
+                </p>
+              ) : (
+                recentPages.map((post) => (
+                  <RecentPostCard key={post.id} page={post} />
+                ))
+              )}
             </div>
 
             <MoreButton href="/pages" />

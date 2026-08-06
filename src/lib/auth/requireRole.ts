@@ -1,10 +1,10 @@
 // =============================================================
 // 화면 접근 차단 — /admin 하위 페이지용
 //
-// **service 의 assertAdmin 을 대체하지 않는다.** 둘은 막는 대상이 다르다.
-//   requireAdmin (여기) — 화면. 서버 컴포넌트 진입부에서 렌더 자체를 막는다.
-//   assertAdmin (guards.ts) — 데이터. API 는 페이지를 거치지 않고 직접 호출되므로
-//                             service 에서 따로 막아야 한다.
+// **service 의 assertRole 을 대체하지 않는다.** 둘은 막는 대상이 다르다.
+//   requireRole (여기) — 화면. 서버 컴포넌트 진입부에서 렌더 자체를 막는다.
+//   assertRole (guards.ts) — 데이터. API 는 페이지를 거치지 않고 직접 호출되므로
+//                            service 에서 따로 막아야 한다.
 // 하나로 합치려 들면 반드시 한쪽이 뚫린다.
 //
 // middleware 가 아니라 페이지에서 하는 이유는 두 가지다.
@@ -17,18 +17,22 @@
 
 import { redirect } from "next/navigation";
 
+import { hasRole, type Role } from "./roles";
 import { getSession, type SessionPayload } from "./session";
 
 /**
- * 관리자만 통과시킨다. 아니면 홈으로 돌려보낸다.
+ * `minRole` 이상만 통과시킨다. 아니면 홈으로 돌려보낸다.
  *
  * 401/403 을 던지지 않고 redirect 하는 이유: 여기는 API 가 아니라 화면이고,
  * 사용자에게 보여줄 것은 에러 코드가 아니라 갈 수 있는 페이지다.
+ *
+ * 통과 조건을 명시적으로 받는다. 화면마다 요구 권한이 다르기 때문이다 —
+ * 위키 관리·게시물 작성은 EDITOR, 사용자/관리자 관리는 ADMIN.
  */
-export async function requireAdmin(): Promise<SessionPayload> {
+export async function requireRole(minRole: Role): Promise<SessionPayload> {
   const session = await getSession();
 
-  if (!session || session.role !== "ADMIN") redirect("/");
+  if (!session || !hasRole(session.role, minRole)) redirect("/");
 
   return session;
 }

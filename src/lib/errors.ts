@@ -47,6 +47,22 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/**
+ * 요청한 리소스가 없다 — 없는 slug, 없는 게시물 id, 비공개(DRAFT)·삭제된 게시물. → 404
+ *
+ * fields 가 없다. 어느 입력 칸이 틀린 문제가 아니라 대상 자체가 없는 것이라
+ * 폼 단위 문구 하나로만 답한다.
+ *
+ * "삭제됨"과 "없음"을 구분해서 알려주지 않는다 — 비공개 게시물의 존재 여부가
+ * 상태 코드로 새어나가지 않게 둘 다 404 로 답한다.
+ */
+export class NotFoundError extends Error {
+  constructor(message = "요청하신 대상을 찾을 수 없습니다.") {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
 /** 누구인지는 알지만 권한이 없다. → 403 */
 export class ForbiddenError extends Error {
   constructor(message = "권한이 없습니다.") {

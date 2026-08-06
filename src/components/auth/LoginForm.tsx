@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import TextField from "@/components/common/TextField";
 import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
+import { hasRole } from "@/lib/auth/roles";
 import type { User } from "@/lib/types";
 
 /**
@@ -47,7 +48,8 @@ export default function LoginForm() {
 
       // 세션 쿠키가 생겼으니 서버 컴포넌트(헤더)가 다시 그려져야 한다.
       // push 만 하면 클라이언트 라우터 캐시가 GUEST 헤더를 그대로 재사용한다.
-      router.replace(user.role === "ADMIN" ? "/admin" : "/");
+      // 관리 화면에 들어갈 수 있으면 거기로. 기준은 페이지 가드와 같은 EDITOR 다.
+      router.replace(hasRole(user.role, "EDITOR") ? "/admin" : "/");
       router.refresh();
     } catch {
       setError(NETWORK_ERROR);

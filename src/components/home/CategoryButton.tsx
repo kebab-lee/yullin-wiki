@@ -19,7 +19,7 @@ type CategoryButtonProps = {
 export default function CategoryButton({ category, active = false }: CategoryButtonProps) {
   return (
     <Link
-      href={`/category/${category.slug}`}
+      href={`/categories/${category.slug}`}
       aria-current={active ? "page" : undefined}
       className={[
         "size-[110px] shrink-0 rounded-pill border-2 p-[10px] transition-colors",

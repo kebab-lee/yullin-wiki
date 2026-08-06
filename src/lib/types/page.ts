@@ -43,20 +43,92 @@ export interface Page {
 }
 
 /**
+ * 게시물 한 건을 새로 만들 때 repository 가 받는 값.
+ *
+ * Page 에서 DB 가 채우는 것(id · created_at · updated_at · deleted_at)을 뺀 모양이다.
+ * Partial<Page> 로 두지 않는 이유는 "무엇을 반드시 줘야 하는가"가 타입으로
+ * 드러나야 하기 때문이다 — 특히 authorId 는 service 가 세션에서 채우는 값이고,
+ * 빠뜨리면 컴파일이 막혀야 한다.
+ *
+ * tags 는 pages 컬럼이 아니라 tags / page_tags 두 테이블이다. 그래도 도메인에서는
+ * "게시물이 태그를 가진다"가 사실이므로 여기 함께 둔다 — 그 사실을 몇 개의
+ * INSERT 로 옮기느냐는 repository 의 사정이다.
+ *
+ * content 의 타입은 도메인 정본인 PageContent 다. Tiptap 의 JSONContent 를 여기
+ * 쓰면 에디터 의존이 도메인 모델 전체로 새어나간다(CLAUDE.md "도메인 타입에서는
+ * PageContent 라는 불투명 타입으로 감싸 둔다"). JSONContent 는 밖에서 들어온
+ * unknown 을 PageContent 로 좁히는 지점(validation/page.ts)에서만 쓴다.
+ */
+export interface CreatePageData {
+  categoryId: string;
+  authorId: string;
+
+  title: string;
+  content: PageContent;
+  plainText: string;
+
+  status: PageStatus;
+
+  /**
+   * status 가 PUBLISHED 면 반드시 값이 있어야 한다 (pages_published_at_chk).
+   * 그 규칙을 repository 가 몰래 채우지 않고 service 가 명시적으로 넘긴다 —
+   * "언제 공개되었는가"는 DB 사정이 아니라 업무 규칙이다.
+   */
+  publishedAt: string | null;
+
+  /** 태그 이름. 중복 없이 정리된 상태로 온다고 가정한다 (validation 이 보장). */
+  tags: readonly string[];
+}
+
+/**
+ * 상세 화면용 모델 — 게시물 본문 + 화면이 요구하는 주변 정보.
+ *
+ * Page 를 그대로 쓰지 않는 이유: 상세 헤더(Figma 1:1399)는 태그·작성자·댓글 수를
+ * 함께 그리는데 이들은 pages 행에 없다(page_tags / users / comments). 화면이
+ * 이것들을 각각 따로 요청하면 왕복이 네 번이 되고, 그때마다 클라이언트가
+ * "게시물 하나를 그리려면 무엇을 조합해야 하는가"를 알아야 한다. 조합은
+ * 서버가 끝내고 프론트는 완성된 한 덩어리만 받는다.
+ *
+ * Java 백엔드가 같은 JSON 을 내려주면 프론트는 무변경이다.
+ */
+export interface PageDetail extends Page {
+  /** 태그 이름 목록 (tags.name) */
+  tags: string[];
+
+  /**
+   * 작성자 표시명. 탈퇴 회원은 users.name 이 NULL 이 되므로 null 일 수 있다.
+   * "탈퇴한 사용자" 같은 대체 문구는 화면의 몫이지 도메인의 몫이 아니다.
+   */
+  authorName: string | null;
+
+  /** 보이는 댓글 수 (status = 'VISIBLE'). 댓글 목록은 다음 슬라이스다. */
+  commentCount: number;
+}
+
+/**
  * 목록·홈 카드용 요약 모델.
  *
  * 카드는 본문 JSON 전체가 아니라 잘라낸 미리보기 텍스트와 태그 이름만 필요하다.
  * 카드 하나 그리자고 content(jsonb) 전체를 내려보내지 않기 위해 Page와 분리한다.
+ * **content 필드가 없는 것이 이 타입의 존재 이유다** — 목록 응답에 ProseMirror
+ * JSON 이 실리지 않는다는 계약을 타입으로 못박는다.
  */
-export interface PagePreview {
+export interface PageSummary {
   id: string;
   title: string;
+
+  /** 카테고리 링크·배지용. 표시명이 아니라 불변 식별자를 싣는다. */
+  categoryId: string;
 
   /** 태그 이름 목록 (tags.name) */
   tags: string[];
 
   /** plainText를 잘라낸 미리보기 문자열. Page.content(ProseMirror JSON)와 다르다. */
-  content: string;
+  excerpt: string;
 
+  /** 보이는 댓글 수 (status = 'VISIBLE') */
   commentCount: number;
+
+  /** ISO 8601. 공개 목록에 오르는 게시물은 항상 값이 있다. */
+  publishedAt: string | null;
 }

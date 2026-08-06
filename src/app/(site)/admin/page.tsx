@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { requireRole } from "@/lib/auth/requireRole";
 import type { CommentPreview, ReportPreview } from "@/lib/types";
 
 // ---- Dummy data ----
@@ -175,8 +175,9 @@ function ReportCard({ author, content, reason, isNew }: ReportPreview) {
 // ---- Page ----
 
 export default async function AdminPage() {
-  // 화면 접근 차단. 데이터 변경 차단은 service 의 assertAdmin 이 따로 맡는다.
-  await requireAdmin();
+  // 화면 접근 차단. 데이터 변경 차단은 service 의 assertRole 이 따로 맡는다.
+  // 대시보드는 위키 운영 화면이므로 EDITOR 부터 들어온다 (ADMIN 은 계층상 포함).
+  await requireRole("EDITOR");
 
   return (
     <div className="pt-[97px] pb-[80px]">

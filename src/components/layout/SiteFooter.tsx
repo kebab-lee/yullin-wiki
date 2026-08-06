@@ -1,46 +1,22 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import type { Category } from "@/lib/types";
 
-/**
- * 푸터 카테고리 목록 (Figma 1:416).
- *
- * 표시에는 짧은 형(name)이 아니라 **긴 형(fullName)** 을 쓴다.
- *
- * TODO: GET /api/categories 연동 시 제거. fullName 필드를 사용한다.
- */
-const FOOTER_CATEGORIES: Category[] = [
-  {
-    id: "1",
-    slug: "space",
-    name: "공간",
-    fullName: "열린교회 속 공간",
-    icon: "⛪️",
-    sortOrder: 1,
-  },
-  {
-    id: "2",
-    slug: "serving",
-    name: "섬김",
-    fullName: "열린교회 내 섬김",
-    icon: "🤲",
-    sortOrder: 2,
-  },
-  {
-    id: "3",
-    slug: "youth",
-    name: "열청",
-    fullName: "열린교회 청년부",
-    icon: "🌱",
-    sortOrder: 3,
-  },
-];
+type SiteFooterProps = {
+  /**
+   * 푸터 카테고리 목록 (Figma 1:416).
+   * 데이터는 루트 layout 이 GET /api/categories 로 받아 내려준다 —
+   * 컴포넌트 안에서 fetch 하지 않는다.
+   */
+  categories: Category[];
+};
 
 /**
  * 모든 페이지가 공유하는 푸터 — Figma `Footer` 1:396.
  * 유저/관리자 공통이라 role 분기가 없다.
  */
-export default function SiteFooter() {
+export default function SiteFooter({ categories }: SiteFooterProps) {
   return (
     <footer className="w-full overflow-hidden bg-brand-red">
       <div className="mx-auto w-[880px] max-w-full py-[59px]">
@@ -76,13 +52,14 @@ export default function SiteFooter() {
                 <p className="whitespace-nowrap text-footer-title text-brand-red-white">
                   카테고리
                 </p>
-                {FOOTER_CATEGORIES.map((category) => (
-                  <p
+                {categories.map((category) => (
+                  <Link
                     key={category.slug}
-                    className="whitespace-nowrap text-footer-content text-brand-red-pink"
+                    href={`/categories/${category.slug}`}
+                    className="whitespace-nowrap text-footer-content text-brand-red-pink hover:text-brand-red-white"
                   >
                     {category.fullName}
-                  </p>
+                  </Link>
                 ))}
               </div>
 
