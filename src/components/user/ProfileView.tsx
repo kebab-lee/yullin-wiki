@@ -37,8 +37,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 /**
  * 마이페이지 조회 — Figma 유저 마이페이지 1:1003 (Frame 1507, 880x593).
  *
- * 서버 컴포넌트다. 이 화면에는 상태도 이벤트도 없다 — 유일한 동작인
- * "수정"은 링크 이동이고, 계정 삭제 버튼은 아직 붙일 동작이 없다.
+ * 서버 컴포넌트다. 이 화면에는 상태도 이벤트도 없다 — "수정"도 "계정 삭제하기"도
+ * 링크 이동이고, 판단과 제출은 이동한 화면이 한다.
  *
  * **하단 "내 댓글 모아보기"(Frame 1495)는 렌더하지 않는다.** 댓글 기능 자체가
  * 아직 없어서 자리만 비워두면 빈 상자가 영구히 남는데, 그건 "곧 생긴다"는
@@ -58,16 +58,19 @@ export default function ProfileView({ user }: { user: User }) {
           안녕하세요
         </p>
 
-        {/* Figma: y=110, 97x26 */}
-        <button
-          type="button"
-          // TODO: 탈퇴 슬라이스에서 연결. 지금은 배치만 한다 —
-          // 동작 없는 버튼이라도 시안의 자리를 잡아두는 편이,
-          // 나중에 레이아웃을 다시 맞추는 것보다 낫다.
-          className="mt-[15px] h-[26px] w-[97px] rounded-badge border border-gray2 text-[13px] font-normal leading-[16px] text-gray3 transition-colors hover:border-brand-red hover:text-brand-red"
+        {/* Figma: y=110, 97x26 — 탈퇴 화면(1:1163)으로 가는 링크.
+            버튼이 아니라 Link 다. 여기서 하는 일은 이동뿐이고, 삭제 여부를 묻는
+            것도 실제 삭제도 그 화면의 몫이다 — 조회 화면을 클라이언트
+            컴포넌트로 만들 이유가 없다.
+
+            관리자에게도 그대로 보인다. 숨기면 "왜 없지"를 화면이 답하지 못하고,
+            그 화면이 이미 이유를 적어두고 있다. */}
+        <Link
+          href="/mypage/withdraw"
+          className="mt-[15px] flex h-[26px] w-[97px] items-center justify-center rounded-badge border border-gray2 text-[13px] font-normal leading-[16px] text-gray3 transition-colors hover:border-brand-red hover:text-brand-red"
         >
           계정 삭제하기
-        </button>
+        </Link>
       </div>
 
       {/* Figma Frame 1494 (595x170) */}

@@ -160,6 +160,16 @@ export function validateChurchMember(value: string): ValidationResult {
   return validate(value, [oneOf(CHURCH_MEMBER_VALUES, CHOICE_REQUIRED)]);
 }
 
+// ── 탈퇴 ──────────────────────────────────────────────────────
+/**
+ * 탈퇴 확인 칸에 넣은 아이디가 본인 것과 다르다.
+ *
+ * 형식 문구(FORMAT_ERROR)와 구분한다 — 이 칸에서 사용자가 알아야 할 것은
+ * "형식이 틀렸다"가 아니라 "지금 로그인한 계정의 아이디가 아니다"다.
+ * 대조는 서버가 세션의 주인으로 하고, 클라이언트는 이 문구를 받아서 그린다.
+ */
+export const WITHDRAW_LOGIN_ID_MISMATCH = "⚠️ 아이디가 일치하지 않습니다";
+
 // ── 회원정보 (가입과 수정이 공유하는 부분) ────────────────────
 /**
  * 회원가입과 회원정보 수정이 **똑같이** 다루는 필드.

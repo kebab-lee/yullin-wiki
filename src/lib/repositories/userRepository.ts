@@ -239,6 +239,39 @@ export async function update(
 }
 
 /**
+ * 탈퇴 처리 — 소프트 삭제.
+ *
+ * **UPDATE 한 번이다.** status / deleted_at / PII 를 나눠 쏘면 중간에 실패했을 때
+ * "상태는 WITHDRAWN 인데 전화번호는 남은" 반쪽 계정이 생긴다. 단일 문이면
+ * Postgres 가 문 단위로 원자성을 보장하므로 트랜잭션을 따로 열 필요도 없다.
+ *
+ * **login_id 를 비우지 않는다.** unique 제약이 살아 있는 채로 남아야 같은
+ * 아이디로 다시 가입할 수 없고, 과거에 남긴 기록이 나중에 같은 아이디를 쓰는
+ * 다른 사람의 것으로 오인되지 않는다 (docs/policy-draft.md 3절).
+ *
+ * password_hash 도 비우지 않는다 — not null 컬럼이고, 어차피 로그인은
+ * status 로 막힌다. 지운다고 얻는 것이 없다.
+ *
+ * 갱신된 사용자를 돌려주지 않는다. 호출부가 필요로 하는 것은 "탈퇴했다"는
+ * 사실뿐이고, PII 가 전부 비워진 행을 굳이 위로 올릴 이유가 없다.
+ */
+export async function withdraw(id: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from(TABLE)
+    .update({
+      status: "WITHDRAWN" satisfies UserStatus,
+      deleted_at: new Date().toISOString(),
+      name: null,
+      gender: null,
+      birth_date: null,
+      phone: null,
+    })
+    .eq("id", id);
+
+  if (error) throw new Error(`탈퇴 처리 실패: ${error.message}`);
+}
+
+/**
  * 비밀번호 해시만 바꾼다.
  *
  * 갱신된 사용자를 돌려주지 않는다. 도메인 모델(User)에는 해시가 없어서 이 변경이

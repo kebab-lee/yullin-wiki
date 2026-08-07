@@ -9,8 +9,14 @@ type ArticleHeaderProps = {
   category?: Category;
 };
 
-/** 탈퇴 회원은 users.name 이 NULL 이다. 문구는 도메인이 아니라 화면이 정한다. */
-const UNKNOWN_AUTHOR = "알 수 없음";
+/**
+ * 탈퇴 회원은 users.name 이 NULL 이다. 문구는 도메인이 아니라 화면이 정한다.
+ *
+ * name 이 비는 경로는 탈퇴 하나뿐이므로(가입 시 필수, 수정에서도 필수)
+ * "알 수 없음"처럼 원인을 감추는 문구 대신 사실을 그대로 적는다 — 게시물은
+ * 남고 작성자 정보만 사라진다는 것이 이용 안내(/policy 2절)의 약속이다.
+ */
+const UNKNOWN_AUTHOR = "(탈퇴한 사용자)";
 
 /**
  * `2026.08.06` 형태.

@@ -72,6 +72,14 @@ export default function SiteFooter({ categories }: SiteFooterProps) {
                 <p className="text-footer-content text-brand-red-pink">
                   개발자팀 | yullindevteam001@gmail.com
                 </p>
+                {/* 이용 안내. 가입·탈퇴 화면에서만 닿을 수 있으면 이미 가입한
+                    사용자가 되찾아볼 자리가 없어서 전 페이지 공통인 푸터에 둔다. */}
+                <Link
+                  href="/policy"
+                  className="text-footer-content text-brand-red-pink hover:text-brand-red-white"
+                >
+                  이용 안내
+                </Link>
               </div>
 
               {/* SNS */}

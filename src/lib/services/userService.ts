@@ -14,6 +14,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import type { SessionPayload } from "@/lib/auth/session";
 import {
   ConflictError,
+  ForbiddenError,
   UnauthorizedError,
   ValidationError,
 } from "@/lib/errors";
@@ -24,6 +25,7 @@ import {
   CURRENT_PASSWORD_INVALID,
   LOGIN_ID_TAKEN,
   PASSWORD_UNCHANGED,
+  WITHDRAW_LOGIN_ID_MISMATCH,
   parseProfile,
   validateLoginId,
   validatePasswordChange,
@@ -59,7 +61,7 @@ export async function assertLoginIdAvailable(loginId: string): Promise<void> {
 }
 
 // ── 내 정보 ───────────────────────────────────────────────────
-// 이 아래 세 함수는 전부 **세션 주인의 정보만** 다룬다. id 를 파라미터로 받는
+// 이 아래 함수들은 전부 **세션 주인의 정보만** 다룬다. id 를 파라미터로 받는
 // 함수가 하나도 없는 것이 그 장치다 — 받는 순간 남의 id 를 넣어보는 경로가 열리고,
 // 그때부터는 "호출부가 세션 id 를 넣었는가"에 매번 의존하게 된다.
 // 다른 사용자 조회가 필요해지면 그건 관리자 기능이며 별도 함수여야 한다.
@@ -189,4 +191,58 @@ export async function changePassword(
   // 진짜로 끊으려면 users 에 password_changed_at 같은 컬럼을 두고 세션 검증에서
   // "토큰 발급 시각(iat)이 그보다 이른가"를 보는 수밖에 없다. 스키마와 세션
   // 검증 경로를 함께 바꾸는 일이라 이번 범위 밖이며, 별도 슬라이스로 다룬다.
+}
+
+/**
+ * 탈퇴한다. 되돌릴 수 없다.
+ *
+ * 순서에 규칙이 있다.
+ *   ① 로그인 여부 — 세션이 없으면 401.
+ *   ② 계정 상태 — ACTIVE 가 아니면(이미 탈퇴했거나 차단됐다) 진행하지 않는다.
+ *   ③ 아이디 대조 — **세션의 id 로 읽어온 login_id** 와 입력값을 맞춘다.
+ *   ④ 소프트 삭제.
+ *
+ * **③에서 입력값을 신뢰하지 않는 것이 핵심이다.** 대상은 언제나 세션의 주인이고,
+ * 입력된 아이디는 "정말 이 계정을 지울 생각인가"를 되묻는 확인 절차일 뿐이다.
+ * 입력값으로 사용자를 찾아서 지우면 남의 아이디를 넣어보는 경로가 열린다.
+ *
+ * 비밀번호를 함께 묻지 않는 것은 시안(1:1163)의 결정이다. 확인 수단이 아이디
+ * 하나뿐이지만, 이 요청은 이미 세션 쿠키를 쥔 쪽만 보낼 수 있다.
+ *
+ * **탈퇴 사유를 받지 않고, 문서·댓글도 지우지 않는다** (docs/policy-draft.md 2절).
+ * 세션 쿠키를 만료시키는 것은 HTTP 의 일이라 route handler 가 한다.
+ */
+export async function withdrawMe(
+  session: SessionPayload | null,
+  confirmLoginId: string,
+): Promise<void> {
+  assertAuthenticated(session);
+
+  // ACTIVE 가 아니면 UnauthorizedError 다 — 이미 탈퇴한 계정의 토큰이 남아 있는
+  // 상황이므로 "로그인하지 않은 것과 같다"가 정확한 답이다.
+  const user = await loadActiveUser(session);
+
+  // ── 관리자는 스스로 탈퇴할 수 없다 ──────────────────────────
+  // 관리자 계정은 공개 가입으로 만들어지지 않고 DB 에서 손으로 승격된다
+  // (CLAUDE.md "인증"). 만드는 경로가 DB 인데 없애는 경로만 화면에 두면,
+  // 마지막 ADMIN 이 탈퇴하는 순간 승격을 실행할 관리자가 사라진다 — 되돌리려면
+  // 결국 DB 를 직접 만져야 하고, 그건 애초에 승격이 있던 자리다.
+  //
+  // "마지막 한 명인가"를 세지 않는 이유: 세는 순간 그 판정과 UPDATE 사이에
+  // 다른 관리자가 같은 요청을 보내면 둘 다 통과한다(TOCTOU). 관리자 수를 세는
+  // 쿼리와 잠금을 들이는 대신, 관리자 계정의 수명은 승격과 같은 자리(DB)에서
+  // 다룬다는 규칙 하나로 끝낸다.
+  if (user.role === "ADMIN") {
+    throw new ForbiddenError(
+      "관리자 계정은 탈퇴할 수 없습니다. 문화팀으로 문의해주세요.",
+    );
+  }
+
+  // 확인 칸. 형식 규칙(validateLoginId)을 걸지 않는다 — 이 칸이 답해야 하는
+  // 질문은 "형식이 맞는가"가 아니라 "본인 아이디와 같은가" 하나뿐이다.
+  if (confirmLoginId.trim() !== user.loginId) {
+    throw new ValidationError({ confirmLoginId: WITHDRAW_LOGIN_ID_MISMATCH });
+  }
+
+  await userRepository.withdraw(session.userId);
 }
