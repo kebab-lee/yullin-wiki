@@ -56,6 +56,16 @@ const PHONE_PATTERN = /^01[016789]-\d{3,4}-\d{4}$/;
 export const CHURCH_MEMBER_VALUES = ["MEMBER", "NON_MEMBER"] as const;
 export type ChurchMemberChoice = (typeof CHURCH_MEMBER_VALUES)[number];
 
+/**
+ * 소속 선택지 표시명. 값(DB boolean)과 문구를 잇는 곳은 여기 하나다 —
+ * 회원가입 폼의 라디오와 마이페이지의 값 표시가 같은 문구를 써야 한다.
+ * (GENDER_LABEL 이 성별에 대해 하는 역할과 같다)
+ */
+export const CHURCH_MEMBER_LABEL: Record<ChurchMemberChoice, string> = {
+  MEMBER: "열린교회 교인입니다",
+  NON_MEMBER: "아닙니다",
+};
+
 /** isGender 와 같은 이유의 가드 — service 가 캐스팅 없이 좁히게 한다. */
 export function isChurchMemberChoice(
   value: string,
@@ -90,6 +100,18 @@ export function validatePassword(value: string): ValidationResult {
     required(FORMAT_ERROR),
     pattern(PASSWORD_PATTERN, FORMAT_ERROR),
   ]);
+}
+
+/**
+ * 현재 비밀번호 칸 — 비었는지만 본다.
+ *
+ * 형식 규칙(PASSWORD_PATTERN)을 걸지 않는 것은 의도다. 이 칸이 답해야 하는
+ * 질문은 "지금 비밀번호가 맞는가"이고 그건 저장된 해시를 봐야 알 수 있다.
+ * 여기에 형식 검사를 붙이면, 규칙이 바뀌기 전에 만든 비밀번호를 쓰는 사용자가
+ * **정답을 넣고도** 클라이언트에서 막힌다.
+ */
+export function validateCurrentPassword(value: string): ValidationResult {
+  return validate(value, [required(FORMAT_ERROR)]);
 }
 
 export function validatePasswordConfirm(
@@ -138,15 +160,21 @@ export function validateChurchMember(value: string): ValidationResult {
   return validate(value, [oneOf(CHURCH_MEMBER_VALUES, CHOICE_REQUIRED)]);
 }
 
-// ── 폼 단위 검증 ──────────────────────────────────────────────
+// ── 회원정보 (가입과 수정이 공유하는 부분) ────────────────────
 /**
- * 회원가입 입력. 폼 상태이자 곧 API 요청 바디의 모양이라
- * 값은 전부 문자열로 받는다 (도메인 타입 변환은 service 몫).
+ * 회원가입과 회원정보 수정이 **똑같이** 다루는 필드.
+ *
+ * 두 화면이 받는 값이 같으므로 규칙도 하나여야 한다. 수정 화면용으로 같은
+ * 검증을 다시 적으면 "이름은 몇 자인가"가 두 곳에 생기고, 한쪽만 고쳐질 때
+ * 가입은 통과하는 값이 수정에서 막힌다.
+ *
+ * 아이디·비밀번호가 여기 없는 것은 의도다 — 아이디는 수정 불가이고
+ * 비밀번호 변경은 현재 비밀번호 확인이 붙는 별도 절차다.
+ *
+ * 폼 상태이자 곧 API 요청 바디의 모양이라 값은 전부 문자열로 받는다
+ * (도메인 타입 변환은 service 몫).
  */
-export type SignupInput = {
-  loginId: string;
-  password: string;
-  passwordConfirm: string;
+export type ProfileInput = {
   name: string;
   gender: string;
   birthDate: string;
@@ -154,16 +182,10 @@ export type SignupInput = {
   churchMember: string;
 };
 
-export type SignupErrors = Partial<Record<keyof SignupInput, string>>;
+export type ProfileErrors = Partial<Record<keyof ProfileInput, string>>;
 
-/** 필드별 규칙을 한 번에 돌린다. 통과하면 빈 객체. */
-export function validateSignup(input: SignupInput): SignupErrors {
-  return collectErrors<keyof SignupInput>({
-    loginId: errorOf(validateLoginId(input.loginId)),
-    password: errorOf(validatePassword(input.password)),
-    passwordConfirm: errorOf(
-      validatePasswordConfirm(input.passwordConfirm, input.password),
-    ),
+export function validateProfile(input: ProfileInput): ProfileErrors {
+  return collectErrors<keyof ProfileInput>({
     name: errorOf(validateName(input.name)),
     gender: errorOf(validateGender(input.gender)),
     birthDate: errorOf(validateBirthDate(input.birthDate)),
@@ -172,15 +194,8 @@ export function validateSignup(input: SignupInput): SignupErrors {
   });
 }
 
-/**
- * 검증을 통과한 회원가입 입력.
- *
- * 선택 필드가 유니온으로 좁혀져 있고, 확인용 비밀번호는 빠져 있다
- * (저장할 값이 아니라 입력 검사용이었으므로).
- */
-export type ParsedSignupInput = {
-  loginId: string;
-  password: string;
+/** 검증을 통과한 회원정보. 선택 필드가 도메인 유니온으로 좁혀져 있다. */
+export type ParsedProfileInput = {
   name: string;
   gender: Gender;
   birthDate: string;
@@ -188,28 +203,28 @@ export type ParsedSignupInput = {
   churchMember: ChurchMemberChoice;
 };
 
-export type SignupParseResult =
-  | { readonly ok: true; readonly value: ParsedSignupInput }
-  | { readonly ok: false; readonly errors: SignupErrors };
+export type ProfileParseResult =
+  | { readonly ok: true; readonly value: ParsedProfileInput }
+  | { readonly ok: false; readonly errors: ProfileErrors };
 
 /**
  * 폼과 똑같은 규칙으로 검증하되, 통과한 입력을 도메인 값으로 좁혀서 돌려준다.
  *
- * 폼은 문구만 필요하므로 validateSignup 을 쓰고, service 는 이 함수를 쓴다.
+ * 폼은 문구만 필요하므로 validateProfile 을 쓰고, service 는 이 함수를 쓴다.
  * 검증과 타입 좁히기를 한 번에 끝내야 service 안에 `as Gender` 같은 캐스팅이
  * 생기지 않는다 — 규칙 자체는 위 함수들을 그대로 재사용한다.
  */
-export function parseSignup(input: SignupInput): SignupParseResult {
-  const errors = validateSignup(input);
+export function parseProfile(input: ProfileInput): ProfileParseResult {
+  const errors = validateProfile(input);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   const { gender, churchMember } = input;
-  // 위 validateSignup 의 oneOf 가 이미 통과시킨 값이라 도달하지 않는다.
+  // 위 validateProfile 의 oneOf 가 이미 통과시킨 값이라 도달하지 않는다.
   // 타입 좁히기를 성립시키기 위한 방어 분기다.
   if (!isGender(gender) || !isChurchMemberChoice(churchMember)) {
     return {
       ok: false,
-      errors: collectErrors<keyof SignupInput>({
+      errors: collectErrors<keyof ProfileInput>({
         gender: errorOf(validateGender(gender)),
         churchMember: errorOf(validateChurchMember(churchMember)),
       }),
@@ -219,8 +234,6 @@ export function parseSignup(input: SignupInput): SignupParseResult {
   return {
     ok: true,
     value: {
-      loginId: input.loginId,
-      password: input.password,
       name: input.name.trim(),
       gender,
       birthDate: input.birthDate,
@@ -228,4 +241,107 @@ export function parseSignup(input: SignupInput): SignupParseResult {
       churchMember,
     },
   };
+}
+
+// ── 회원가입 ──────────────────────────────────────────────────
+/** 회원정보에 가입에서만 받는 자격 증명(아이디·비밀번호)이 얹힌 모양. */
+export type SignupInput = ProfileInput & {
+  loginId: string;
+  password: string;
+  passwordConfirm: string;
+};
+
+export type SignupErrors = Partial<Record<keyof SignupInput, string>>;
+
+/** 필드별 규칙을 한 번에 돌린다. 통과하면 빈 객체. */
+export function validateSignup(input: SignupInput): SignupErrors {
+  return {
+    ...collectErrors<keyof SignupInput>({
+      loginId: errorOf(validateLoginId(input.loginId)),
+      password: errorOf(validatePassword(input.password)),
+      passwordConfirm: errorOf(
+        validatePasswordConfirm(input.passwordConfirm, input.password),
+      ),
+    }),
+    // 회원정보 부분은 수정 화면과 같은 규칙을 그대로 빌려 쓴다.
+    ...validateProfile(input),
+  };
+}
+
+/**
+ * 검증을 통과한 회원가입 입력.
+ *
+ * 확인용 비밀번호는 빠져 있다 (저장할 값이 아니라 입력 검사용이었으므로).
+ */
+export type ParsedSignupInput = ParsedProfileInput & {
+  loginId: string;
+  password: string;
+};
+
+export type SignupParseResult =
+  | { readonly ok: true; readonly value: ParsedSignupInput }
+  | { readonly ok: false; readonly errors: SignupErrors };
+
+/** parseProfile 과 같은 역할. 가입에서만 받는 두 필드를 앞에 더한다. */
+export function parseSignup(input: SignupInput): SignupParseResult {
+  const errors = validateSignup(input);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  const profile = parseProfile(input);
+  if (!profile.ok) return { ok: false, errors: profile.errors };
+
+  return {
+    ok: true,
+    value: {
+      loginId: input.loginId,
+      password: input.password,
+      ...profile.value,
+    },
+  };
+}
+
+// ── 비밀번호 변경 ─────────────────────────────────────────────
+/**
+ * 현재 비밀번호가 틀렸다.
+ *
+ * 형식 문구(FORMAT_ERROR)와 구분한다 — "형식을 확인해주세요"는 고칠 방향을
+ * 알려주지만, 여기서 사용자가 알아야 할 것은 "이 값이 지금 비밀번호가 아니다"다.
+ * 판정은 서버(bcrypt 대조)만 할 수 있고 클라이언트는 이 문구를 받아서 그린다.
+ */
+export const CURRENT_PASSWORD_INVALID = "⚠️ 현재 비밀번호가 올바르지 않습니다";
+
+/** 새 비밀번호가 지금 쓰는 것과 같다. 바꾸는 의미가 없으므로 거절한다. */
+export const PASSWORD_UNCHANGED =
+  "⚠️ 현재와 다른 비밀번호를 입력해주세요";
+
+/**
+ * 비밀번호 변경 입력.
+ *
+ * 새 비밀번호는 가입과 **같은 규칙**(validatePassword)으로 검사한다. 여기에
+ * 따로 정규식을 적으면 가입 때 통과한 형식이 변경에서 막히거나 그 반대가 된다.
+ */
+export type PasswordChangeInput = {
+  currentPassword: string;
+  newPassword: string;
+  newPasswordConfirm: string;
+};
+
+export type PasswordChangeErrors = Partial<
+  Record<keyof PasswordChangeInput, string>
+>;
+
+/**
+ * 형식만 본다. "현재 비밀번호가 맞는가"와 "지금 것과 같은가"는 저장된 해시를
+ * 봐야 답할 수 있어 service 가 판정한다 — 순수 함수인 이 모듈이 할 수 없는 일이다.
+ */
+export function validatePasswordChange(
+  input: PasswordChangeInput,
+): PasswordChangeErrors {
+  return collectErrors<keyof PasswordChangeInput>({
+    currentPassword: errorOf(validateCurrentPassword(input.currentPassword)),
+    newPassword: errorOf(validatePassword(input.newPassword)),
+    newPasswordConfirm: errorOf(
+      validatePasswordConfirm(input.newPasswordConfirm, input.newPassword),
+    ),
+  });
 }

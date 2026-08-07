@@ -12,6 +12,8 @@ import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
 import type { ApiErrorBody } from "@/lib/api/types";
 import { GENDERS, GENDER_LABEL } from "@/lib/types";
 import {
+  CHURCH_MEMBER_LABEL,
+  CHURCH_MEMBER_VALUES,
   LOGIN_ID_AVAILABLE,
   LOGIN_ID_TAKEN,
   PASSWORD_HINT,
@@ -40,10 +42,11 @@ const GENDER_OPTIONS = GENDERS.map((gender) => ({
   label: GENDER_LABEL[gender],
 }));
 
-const CHURCH_MEMBER_OPTIONS = [
-  { value: "MEMBER", label: "열린교회 교인입니다" },
-  { value: "NON_MEMBER", label: "아닙니다" },
-] as const;
+// 문구의 정본은 validation 모듈이다 — 마이페이지 조회·수정도 같은 문구를 쓴다.
+const CHURCH_MEMBER_OPTIONS = CHURCH_MEMBER_VALUES.map((value) => ({
+  value,
+  label: CHURCH_MEMBER_LABEL[value],
+}));
 
 const NEEDS_DUPLICATE_CHECK = "⚠ 아이디 중복 확인을 해주세요";
 

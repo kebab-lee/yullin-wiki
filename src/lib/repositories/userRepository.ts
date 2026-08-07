@@ -63,6 +63,28 @@ export type NewUser = {
   isChurchMember: boolean;
 };
 
+/**
+ * 사용자가 스스로 고칠 수 있는 값.
+ *
+ * **role / status / loginId 가 없는 것이 이 타입의 핵심이다.** 권한 상승 경로를
+ * 타입 레벨에서 끊는다 — service 가 실수로 넘기려 해도 컴파일이 막고, 요청 바디에
+ * role 이 섞여 들어와도 이 모양으로 옮기는 과정에서 그냥 사라진다.
+ * (service 의 검증만으로 막으면 "거르는 코드를 빠뜨렸는가"에 매번 의존하게 된다)
+ *
+ * 관리자가 역할·상태를 바꾸는 경로가 나중에 생기면 그건 별도 함수여야 한다.
+ * 이 타입에 필드를 더해서 겸용하지 마라 — 그 순간 두 경로의 권한 차이가 사라진다.
+ *
+ * 비밀번호도 여기 없다. 현재 비밀번호 확인이 붙는 별도 절차라 updatePassword 로 나뉜다.
+ */
+export type UpdateUserData = {
+  name: string;
+  gender: Gender;
+  /** "YYYY-MM-DD". */
+  birthDate: string;
+  phone: string;
+  isChurchMember: boolean;
+};
+
 // ── 변환 ──────────────────────────────────────────────────────
 function toUser(row: UserRow): User {
   return {
@@ -96,6 +118,28 @@ export async function findById(id: string): Promise<User | null> {
 
   if (error) throw new Error(`사용자 조회 실패: ${error.message}`);
   return data ? toUser(data) : null;
+}
+
+/**
+ * id 로 찾되 해시까지 함께 준다. 비밀번호 변경에서 현재 비밀번호를 대조할 때 쓴다.
+ *
+ * findById 와 나눠 둔 것은 의도다 — 해시를 싣는 조회는 부르는 쪽이 그 사실을
+ * 알고 불러야 한다. 기본 조회에 해시를 얹으면 화면용 조회까지 전부 해시를
+ * 들고 다니게 되고, 응답으로 새어나갈 경로가 그만큼 늘어난다.
+ */
+export async function findByIdWithHash(
+  id: string,
+): Promise<UserWithHash | null> {
+  const { data, error } = await getSupabase()
+    .from(TABLE)
+    .select(`${USER_COLUMNS}, password_hash`)
+    .eq("id", id)
+    .maybeSingle<UserRowWithHash>();
+
+  if (error) throw new Error(`사용자 조회 실패: ${error.message}`);
+  if (!data) return null;
+
+  return { ...toUser(data), passwordHash: data.password_hash };
 }
 
 /**
@@ -161,4 +205,53 @@ export async function create(input: NewUser): Promise<User> {
   }
 
   return toUser(data);
+}
+
+// ── 수정 ──────────────────────────────────────────────────────
+/**
+ * 회원정보를 고친다.
+ *
+ * 받는 값이 UpdateUserData 로 고정돼 있어 role / status / login_id 는 이 경로로
+ * 바뀔 수 없다. 아래 update 문에 그 컬럼들이 아예 등장하지 않는 것이 그 결과다 —
+ * **여기에 컬럼을 추가하지 마라.**
+ *
+ * updated_at 은 users_set_updated_at 트리거가 갱신한다.
+ */
+export async function update(
+  id: string,
+  data: UpdateUserData,
+): Promise<User> {
+  const { data: row, error } = await getSupabase()
+    .from(TABLE)
+    .update({
+      name: data.name,
+      gender: data.gender,
+      birth_date: data.birthDate,
+      phone: data.phone,
+      is_church_member: data.isChurchMember,
+    })
+    .eq("id", id)
+    .select(USER_COLUMNS)
+    .single<UserRow>();
+
+  if (error) throw new Error(`회원정보 수정 실패: ${error.message}`);
+  return toUser(row);
+}
+
+/**
+ * 비밀번호 해시만 바꾼다.
+ *
+ * 갱신된 사용자를 돌려주지 않는다. 도메인 모델(User)에는 해시가 없어서 이 변경이
+ * 반영된 값이 애초에 없고, 호출부가 필요로 하는 것도 "바뀌었다"는 사실뿐이다.
+ */
+export async function updatePassword(
+  id: string,
+  passwordHash: string,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from(TABLE)
+    .update({ password_hash: passwordHash })
+    .eq("id", id);
+
+  if (error) throw new Error(`비밀번호 변경 실패: ${error.message}`);
 }

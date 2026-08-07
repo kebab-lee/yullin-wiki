@@ -11,9 +11,12 @@
 // 클라이언트도 같은 검증 함수를 쓰지만 그건 편의고, 진짜 방어선은 여기다.
 // =============================================================
 
-import bcrypt from "bcryptjs";
-
 import { assertAuthenticated } from "@/lib/auth/guards";
+import {
+  ABSENT_USER_HASH,
+  hashPassword,
+  verifyPassword,
+} from "@/lib/auth/password";
 import { createSession, getSession } from "@/lib/auth/session";
 import { UnauthorizedError, ValidationError } from "@/lib/errors";
 import * as userRepository from "@/lib/repositories/userRepository";
@@ -26,21 +29,9 @@ import {
   type SignupInput,
 } from "@/lib/validation/user";
 
-/**
- * bcrypt 라운드. 10 은 로그인 지연(수십 ms)과 무차별 대입 비용 사이의 통상값이다.
- * Java 로 옮길 때 BCryptPasswordEncoder(10) 이 같은 해시를 검증한다.
- */
-const SALT_ROUNDS = 10;
-
-/**
- * 존재하지 않는 아이디로 로그인을 시도했을 때 대신 비교할 더미 해시.
- *
- * 계정이 없다고 바로 반환하면 응답이 눈에 띄게 빨라서, 문구를 통일해도
- * 응답 시간만으로 어떤 아이디가 존재하는지 훑을 수 있다. 같은 코스트의 해시를
- * 한 번 돌려서 두 경로의 소요 시간을 맞춘다. (무작위 문자열의 해시라 절대 맞지 않는다)
- */
-const ABSENT_USER_HASH =
-  "$2b$10$NXt5UeE7l//OYPYKGi7SC.VQP3aCoE5kO6zstnKnWgnm7FcQ6PowK";
+// 해시 생성·대조와 그 비용(라운드)은 auth/password.ts 가 소유한다.
+// 비밀번호 변경(userService)도 같은 함수를 쓴다 — 라운드가 두 곳에 적히면
+// 한쪽만 올렸을 때 같은 계정의 해시 비용이 갈린다.
 
 /** 해시를 떼고 도메인 모델만 남긴다. 응답 JSON 으로 해시가 새지 않는 지점. */
 function stripHash({ passwordHash, ...user }: UserWithHash): User {
@@ -60,7 +51,7 @@ export async function signup(input: SignupInput): Promise<User> {
   // 중복 판정은 중복확인 버튼이 쓰는 것과 같은 규칙이어야 한다.
   await userService.assertLoginIdAvailable(parsed.value.loginId);
 
-  const passwordHash = await bcrypt.hash(parsed.value.password, SALT_ROUNDS);
+  const passwordHash = await hashPassword(parsed.value.password);
 
   return userRepository.create({
     loginId: parsed.value.loginId,
@@ -91,7 +82,7 @@ export async function login(
   const found = await userRepository.findByLoginId(loginId);
 
   // 계정이 없어도 해시 비교를 한 번 돌린다 (위 ABSENT_USER_HASH 주석 참조).
-  const matched = await bcrypt.compare(
+  const matched = await verifyPassword(
     password,
     found?.passwordHash ?? ABSENT_USER_HASH,
   );

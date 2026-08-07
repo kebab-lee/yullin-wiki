@@ -67,6 +67,16 @@ export type PageDetailBody = { page: PageDetail };
 export type CurrentUserBody = { user: User };
 
 /**
+ * GET · PATCH /api/users/me — 마이페이지의 내 회원정보.
+ *
+ * 모양이 CurrentUserBody 와 같지만 별칭으로 합치지 않는다. 두 응답이 답하는
+ * 질문이 다르다 — /api/auth/me 는 "지금 누가 로그인했는가"(헤더·가드용)이고
+ * 이쪽은 "내 회원정보를 보여달라"(화면용)다. 마이페이지에 표시 항목이 늘어
+ * 계약이 두꺼워질 때 인증 쪽 응답까지 끌려가면 안 된다.
+ */
+export type MyProfileBody = { user: User };
+
+/**
  * POST /api/admin/pages — 발행 성공.
  *
  * 방금 만든 게시물을 통째로 돌려주지 않는다. 에디터가 성공 후에 하는 일은

@@ -42,7 +42,10 @@ export default function AdminHeaderView({ role }: { role: Role }) {
 
         {/* 우: 프로필 + 로그아웃 */}
         <div className="flex h-[35px] items-center justify-center gap-[10px]">
-          <Link href="/admin/mypage" aria-label="마이페이지" className="block shrink-0">
+          {/* 관리자용 마이페이지를 따로 두지 않는다 (`/admin/mypage` 없음).
+              관리자도 회원정보는 같은 화면에서 본다 — 화면을 복제하면 같은 폼을
+              두 벌 유지하게 된다 (CLAUDE.md "화면 중복"). */}
+          <Link href="/mypage" aria-label="마이페이지" className="block shrink-0">
             <Image src="/icons/profile.svg" alt="" width={30} height={30} />
           </Link>
           <AuthActionButton role={role} />

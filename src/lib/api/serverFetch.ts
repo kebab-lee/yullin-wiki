@@ -9,6 +9,8 @@
 // 이 모듈이 필요 없다 (절대 URL 을 클라이언트 번들에 넣을 이유도 없다).
 // =============================================================
 
+import { cookies } from "next/headers";
+
 import { apiUrl } from "./baseUrl";
 import type { ApiErrorBody } from "./types";
 
@@ -43,6 +45,37 @@ export async function fetchApi<T>(
 
   if (!response.ok) {
     // 서버가 내려준 문구가 있으면 살려서 로그에 남긴다. 없으면 상태 코드만.
+    const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
+    throw new ApiResponseError(
+      response.status,
+      `GET ${path} 실패 (${response.status}): ${body?.message ?? "응답 본문 없음"}`,
+    );
+  }
+
+  return (await response.json()) as T;
+}
+
+/**
+ * 로그인한 사용자 본인의 데이터를 GET 한다. 세션 쿠키를 실어 보낸다.
+ *
+ * fetchApi 와 나눠 둔 이유가 둘이다.
+ *   1. **쿠키.** 서버에서 도는 fetch 는 브라우저 요청의 쿠키를 자동으로 물려받지
+ *      않는다. 그냥 fetchApi 를 부르면 Route Handler 쪽에서 세션이 없는 요청으로
+ *      보여 401 이 온다.
+ *   2. **캐시.** 응답이 사용자마다 다르므로 revalidate 를 받지 않고 no-store 로
+ *      고정한다. 초 단위라도 캐싱하면 A 의 회원정보가 B 에게 나갈 수 있다.
+ *      이 값을 파라미터로 열어두지 않는 것이 그 사고를 구조적으로 막는다.
+ *
+ * 화면 접근 차단(requireAuth)과 별개다. 이건 데이터를 가져오는 방법일 뿐이고,
+ * 진짜 판정은 Route Handler 너머 service 의 assertAuthenticated 가 한다.
+ */
+export async function fetchApiAsUser<T>(path: string): Promise<T> {
+  const response = await fetch(apiUrl(path), {
+    cache: "no-store",
+    headers: { cookie: (await cookies()).toString() },
+  });
+
+  if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
     throw new ApiResponseError(
       response.status,
