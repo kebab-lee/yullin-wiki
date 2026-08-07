@@ -42,7 +42,7 @@ src/app/api/**/route.ts     Route Handler
 src/app/page.tsx            홈 (헤더 없음 — (site) 그룹 밖)
 src/app/(site)/**           헤더가 붙는 모든 페이지 (어드민 포함)
 src/components/**           UI 컴포넌트
-src/lib/repositories/       Supabase 호출 (여기만)
+src/lib/repositories/       Supabase 호출 (여기만 — DB · 스토리지)
 src/lib/services/           비즈니스 로직 · 권한 체크
 src/lib/auth/               인증 추상화
 src/lib/types/              도메인 모델 (DB 스키마와 분리)
@@ -97,6 +97,33 @@ docs/                       설계 문서
 - **DB 안에 넣는 로직(View / RPC)은 최소로 유지한다.** 새로 만들기 전에 "service 레이어
   TS 코드로 충분한가"를 먼저 묻는다. 현재 DB 로직은 `set_updated_at()` 트리거 하나뿐이다.
 
+## 파일 스토리지
+
+- **S3(또는 다른 오브젝트 스토리지)로 교체할 때 바꾸는 파일은
+  `src/lib/repositories/storageRepository.ts` 하나다.** 스토리지 SDK 를 붙잡는
+  코드가 그 파일 밖에 나오면 안 된다. 버킷 이름과 공개 URL 규칙도 거기에만 있다.
+- 인터페이스는 스토리지 중립적으로 유지한다. `upload(file, path) → { url }` /
+  `delete(path) → void`. 반환값에 Supabase 고유 타입(`StorageError`,
+  `FileObject`, `{ data, error }` 봉투)이 새어나가면 안 된다 — 실패는 평범한
+  Error 로 던지고 성공은 문자열 URL 하나로 답한다.
+- **버킷은 `page-images` 하나** (public, 5MB, png/jpeg/webp/gif). 코드가 버킷을
+  만들지 않는다.
+- **public 버킷을 쓴다. signed URL 로 바꾸지 마라.** 저장된 본문 JSON 안에
+  이미지 URL 이 영구히 박히는데 signed URL 은 만료되므로, 쓰려면 렌더할 때마다
+  본문을 훑어 URL 을 다시 서명해야 한다. 게시물은 어차피 누구나 보는 공개
+  콘텐츠라 숨길 것도 없고, public URL 이라야 CDN 캐싱이 걸린다.
+- **업로드는 반드시 서버(`POST /api/admin/uploads`)를 거친다.** 클라이언트에서
+  버킷으로 직접 쏘면 형식·용량 검증과 리사이즈가 통째로 건너뛰어진다.
+- **저장 파일명은 uuid 다.** 클라이언트가 보낸 이름을 경로에 쓰지 않는다
+  (경로 조작·덮어쓰기·한글 인코딩). 경로는 `연/월/uuid.webp`.
+- 업로드 시점에 긴 변 1600px webp 로 변환한다 (`sharp`). 이 규격은
+  `uploadService` 와 `scripts/migrate-base64-images.mjs` 두 곳이 공유하므로
+  한쪽만 바꾸지 마라.
+- sharp 는 네이티브 바이너리라 **Edge 런타임에서 돌지 않는다.** 업로드 라우트는
+  `export const runtime = "nodejs"` 를 명시한다.
+- **게시물에서 이미지를 빼도 스토리지 파일은 지우지 않는다.** 고아 파일 정리는
+  별도 과제다 (되돌리기·이력 때문에 즉시 삭제가 오히려 위험하다).
+
 ## 에디터 / 본문 포맷
 
 - 에디터는 **Tiptap**. `pages.content`에는 Tiptap이 내보내는 **ProseMirror 문서 JSON을
@@ -110,6 +137,18 @@ docs/                       설계 문서
   훑어 `type: 'text'` 노드의 `text`만 모은다. Tiptap 의존성 없이 구현하고, DB 함수로
   만들지 않는다 (Java 이관 시 그대로 옮기기 위해).
 - 목차(TOC)와 참고문헌은 별도 저장하지 않는다. 렌더 시점에 heading 노드에서 뽑는다.
+- **본문에 base64 이미지를 넣지 않는다.** 이미지 노드의 `src` 는 언제나 스토리지
+  URL 이다 (→ `## 파일 스토리지`). 이미지가 본문에 들어오는 길은 넷인데
+  (붙여넣기 · 드래그앤드롭 · 툴바 · 슬래시 커맨드) 넷 다
+  `src/components/admin/editor/imageUpload.ts` 의 `uploadImagesInto` 로 모인다.
+  길을 새로 만들 때 그 함수를 거치지 않으면 그 길만 base64 로 남는다.
+- **업로드 코드를 `src/lib/editor/extensions.ts` 에 두지 마라.** 그 파일은 읽기
+  전용 렌더러와 공유하는 스키마 정본이라, 업로드를 얹으면 상세 페이지의 서버
+  번들이 fetch 로직까지 끌고 간다. 편집 중 동작(플레이스홀더 등)은 저장되는
+  JSON 에 흔적을 남기지 않으므로 렌더러가 알 필요가 없다.
+- `Image.configure({ allowBase64: true })` 는 **끄지 마라.** 새 이미지는 더
+  이상 base64 로 들어오지 않지만, 이 옵션을 끄면 아직 이관되지 않은 옛 문서의
+  이미지 노드가 렌더러에서 통째로 사라진다.
 
 ## 코딩 컨벤션
 

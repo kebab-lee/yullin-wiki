@@ -86,6 +86,15 @@ export type MyProfileBody = { user: User };
 export type PageCreatedBody = { id: string };
 
 /**
+ * POST /api/admin/uploads — 본문 이미지 업로드 성공.
+ *
+ * 저장 경로(버킷 안의 path)를 함께 내려주지 않는다. 에디터가 하는 일은 이
+ * URL 을 이미지 노드의 src 에 넣는 것뿐이고, 경로는 스토리지의 사정이라
+ * 계약에 실리면 S3 로 갈아끼울 때 프론트까지 흔들린다 — 그때도 URL 은 URL 이다.
+ */
+export type ImageUploadedBody = { url: string };
+
+/**
  * PATCH /api/admin/pages/[id] — 수정 성공.
  *
  * 모양이 PageCreatedBody 와 같지만 별칭으로 합치지 않는다. 두 응답이 우연히

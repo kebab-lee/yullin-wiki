@@ -12,6 +12,7 @@ import type {
 } from '@/lib/api/types'
 import { contentExtensions } from '@/lib/editor/extensions'
 import type { Category, PageDetail } from '@/lib/types'
+import { ALLOWED_IMAGE_TYPES } from '@/lib/validation/upload'
 import {
   toEditorContent,
   validatePageForm,
@@ -19,6 +20,7 @@ import {
   type PageFormInput,
 } from '@/lib/validation/page'
 import EditorToolbar from './EditorToolbar'
+import { createImageUpload, uploadImagesInto } from './imageUpload'
 import { createSlashCommand } from './slashCommand'
 
 type SaveStatus = 'idle' | 'saving' | 'saved'
@@ -131,6 +133,16 @@ export default function PageEditorForm(props: PageEditorFormProps) {
     imageInputRef.current?.click()
   }, [])
 
+  /**
+   * 이미지 업로드 실패 문구. **새 상태를 만들지 않고 formError 를 쓴다** —
+   * 특정 입력 칸에 붙지 않는 실패라는 점에서 401/403/네트워크 실패와 같은
+   * 종류이고, 비슷한 플래그를 하나 더 만들면 두 문구가 동시에 뜨는 경우를
+   * 화면이 따로 처리해야 한다 (CLAUDE.md "기존 플래그를 재사용한다").
+   */
+  const reportImageError = useCallback((message: string) => {
+    setFormError(message)
+  }, [])
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -143,6 +155,9 @@ export default function PageEditorForm(props: PageEditorFormProps) {
         placeholder: '내용을 입력하세요. / 를 입력하면 블록을 삽입할 수 있습니다.',
       }),
       createSlashCommand(triggerImageUpload),
+      // 붙여넣기·드롭으로 들어오는 이미지를 스토리지 업로드로 돌린다.
+      // 이것이 없으면 ProseMirror 기본 동작이 base64 를 본문 JSON 에 박는다.
+      createImageUpload(reportImageError),
     ],
     editorProps: {
       attributes: { class: 'outline-none min-h-[500px] py-6' },
@@ -186,13 +201,27 @@ export default function PageEditorForm(props: PageEditorFormProps) {
 
   // ---- 이미지 업로드 ----
 
+  /**
+   * 툴바·슬래시 커맨드로 고른 파일. 붙여넣기·드롭과 **같은 경로**(uploadImagesInto)로
+   * 보낸다 — 여기서만 다르게 처리하면 한 길만 조용히 base64 로 남는다.
+   *
+   * 고르기 전에 focus 를 준다. 파일 대화상자를 여는 동안 에디터가 포커스를
+   * 잃으면 selection 이 문서 맨 앞으로 돌아가 이미지가 엉뚱한 자리에 꽂힌다.
+   */
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !editor) return
-    // URL.createObjectURL: 현재 세션에서만 유효. 실제 배포 시 서버 업로드 endpoint 연결 필요.
-    const url = URL.createObjectURL(file)
-    editor.chain().focus().setImage({ src: url, alt: file.name }).run()
+    // 같은 파일을 연달아 고를 수 있도록 즉시 비운다.
     e.target.value = ''
+    if (!file || !editor) return
+
+    setFormError(null)
+    editor.commands.focus()
+    void uploadImagesInto(
+      editor,
+      [file],
+      editor.state.selection.from,
+      reportImageError
+    )
   }
 
   // ---- 액션 핸들러 ----
@@ -446,11 +475,13 @@ export default function PageEditorForm(props: PageEditorFormProps) {
         </div>
       </div>
 
-      {/* 숨겨진 파일 input */}
+      {/* 숨겨진 파일 input.
+          accept 는 검증 모듈이 가진 목록 그대로다. 여기 문자열을 따로 적으면
+          대화상자에서는 고를 수 있는데 업로드는 거절당하는 형식이 생긴다. */}
       <input
         ref={imageInputRef}
         type="file"
-        accept="image/*"
+        accept={ALLOWED_IMAGE_TYPES.join(',')}
         className="hidden"
         onChange={handleImageChange}
       />

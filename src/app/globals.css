@@ -161,6 +161,31 @@ body {
   outline: 2px solid rgb(var(--color-brand-red));
 }
 
+/* 업로드 중 플레이스홀더.
+   문서 노드가 아니라 ProseMirror 데코레이션이라 저장되는 JSON 에는 없다.
+   (src/components/admin/editor/imageUpload.ts) */
+.wiki-editor .ProseMirror .wiki-image-uploading {
+  display: inline-block;
+  padding: 6px 12px;
+  margin: 4px 0;
+  border-radius: 8px;
+  background: rgb(var(--color-brand-red-white));
+  color: rgb(var(--color-brand-red));
+  font-size: 13px;
+  user-select: none;
+  animation: wiki-image-uploading-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes wiki-image-uploading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* ── Wiki Article (읽기 전용 본문) ──────────────────────────────
    .wiki-editor 와 같은 본문을 그리지만 클래스를 나눈다. 에디터 쪽 규칙은
    .ProseMirror 에 매달려 있어 서버가 만든 정적 HTML 에는 붙지 않고, 편집용

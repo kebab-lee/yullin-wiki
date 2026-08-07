@@ -28,6 +28,10 @@ yarn-error.log*
 # 로컬 개발용 계정 메모 (docs/ 는 추적 대상이라 명시적으로 제외한다)
 docs/local-accounts.md
 
+# base64 이미지 이관 백업 (scripts/migrate-base64-images.mjs)
+# 되돌리기용 스냅샷이라 로컬에만 둔다 — 본문 전체가 들어있어 저장소에 올릴 것이 아니다.
+scripts/backups/
+
 # vercel
 .vercel
 
