@@ -9,6 +9,7 @@ import { REVALIDATE } from "@/lib/api/baseUrl";
 import { fetchApi } from "@/lib/api/serverFetch";
 import type { CategoryListBody, RecentPageListBody } from "@/lib/api/types";
 import { getViewerRole } from "@/lib/auth/viewer";
+import Image from "next/image";
 
 /** Figma 1:380 기준 카드 3장. */
 const RECENT_LIMIT = 3;
@@ -53,9 +54,15 @@ export default async function HomePage() {
         <div className="absolute top-[199px] left-1/2 z-10 -translate-x-1/2 w-hero-inner flex flex-col items-center gap-[60px]">
           <div className="flex flex-col items-center gap-10 w-full">
             {/* 로고 자리 */}
-            <div className="h-[100px] w-[138px] rounded bg-white/30 flex items-center justify-center text-white text-sm">
-              LOGO
-            </div>
+            {/* <div className="h-[100px] w-[138px] rounded bg-white/30 flex items-center justify-center text-white text-sm">
+             
+            </div> */}
+            <Image
+              src="/brand/logo-footer.svg"
+              alt="열린 위키"
+              width={137}
+              height={100}
+            />
 
             {/* 타이틀 */}
             <div className="flex flex-col items-center justify-center gap-[30px] whitespace-nowrap">
@@ -81,9 +88,21 @@ export default async function HomePage() {
               <span className="text-[25px] leading-[22px]">→</span>
             </div>
 
-            <LinkBadge topLabel="열린교회" bottomLabel="공식페이지" />
-            <LinkBadge topLabel="열린교회" bottomLabel="인스타" />
-            <LinkBadge topLabel="열린교회" bottomLabel="문화팀" />
+            <LinkBadge
+              topLabel="열린교회"
+              bottomLabel="공식페이지"
+              href="https://www.yullin.org"
+            />
+            <LinkBadge
+              topLabel="청년부"
+              bottomLabel="인스타그램"
+              href="https://www.instagram.com/yullin_yct"
+            />
+            <LinkBadge
+              topLabel="청년부"
+              bottomLabel="Youtube"
+              href="https://youtube.com/@yullinyouth?si=7_STglS5ddSmRXuT"
+            />
           </div>
         </div>
       </section>
@@ -93,14 +112,22 @@ export default async function HomePage() {
         <div className="mx-auto flex w-content flex-col gap-20 mt-[65px] mb-[160px]">
           {/* 항목별 둘러보기 (Figma 1:367, h=110) */}
           <div className="flex h-[110px] items-center justify-between">
-            <SectionHeader emoji="📂" title="항목별로 둘러보기" href="/categories" />
+            <SectionHeader
+              emoji="📂"
+              title="항목별로 둘러보기"
+              href="/categories"
+            />
             <CategoryButtonRow categories={categories} />
             <MoreButton href="/categories" />
           </div>
 
           {/* 최근 추가된 게시물 (Figma 1:380, h=190) */}
           <div className="flex h-[190px] items-center justify-between">
-            <SectionHeader emoji="⏰" title="최근 추가된 게시물" href="/pages" />
+            <SectionHeader
+              emoji="⏰"
+              title="최근 추가된 게시물"
+              href="/pages"
+            />
 
             <div className="flex items-center gap-[25px]">
               {recentPages.length === 0 ? (
