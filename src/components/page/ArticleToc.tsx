@@ -49,10 +49,10 @@ export default function ArticleToc({ entries }: ArticleTocProps) {
         htmlFor="article-toc-toggle"
         // lg 에서는 목록이 늘 보이므로 여는 손잡이가 아니라 그냥 제목이다.
         //
-        // 셰브론 회전은 `peer-checked:[&>svg]:` 로 건다. `peer-checked:` 만으로는
-        // 안 된다 — 형제 결합자(`~`)라 체크박스의 **형제**에만 걸리는데
-        // 셰브론은 이 label 의 자식이다.
-        className="flex min-h-11 cursor-pointer items-center justify-between gap-[10px] text-[16px] font-bold leading-[19px] text-black peer-focus-visible:underline peer-checked:[&>svg]:rotate-180 lg:min-h-0 lg:cursor-default lg:pointer-events-none"
+        // 셰브론 회전은 globals.css 의 `.article-toc` 규칙이 맡는다. Tailwind 의
+        // `rotate-*` 는 `--tw-rotate` 를 합성 transform 에 끼워 넣는 방식이라
+        // 이 svg 에서는 값이 먹지 않는다 — 변수를 거치지 않는 평범한 규칙을 쓴다.
+        className="article-toc-summary flex min-h-11 cursor-pointer items-center justify-between gap-[10px] text-[16px] font-bold leading-[19px] text-black peer-focus-visible:underline lg:min-h-0 lg:cursor-default lg:pointer-events-none"
       >
         <span>
           목차

@@ -186,6 +186,15 @@ body {
   }
 }
 
+/* ── 목차 셰브론 (src/components/page/ArticleToc.tsx) ────────────
+   펼쳐지면 화살표가 뒤집힌다. Tailwind 의 `rotate-180` 을 쓰지 않는 이유는
+   그것이 `--tw-rotate` 를 여러 함수가 엮인 합성 transform 에 끼워 넣는 방식이라
+   이 svg 에서 값이 반영되지 않기 때문이다. 변수를 거치지 않고 직접 회전시킨다.
+   ============================================================= */
+#article-toc-toggle:checked + .article-toc-summary > svg {
+  transform: rotate(180deg);
+}
+
 /* ── Wiki Article (읽기 전용 본문) ──────────────────────────────
    .wiki-editor 와 같은 본문을 그리지만 클래스를 나눈다. 에디터 쪽 규칙은
    .ProseMirror 에 매달려 있어 서버가 만든 정적 HTML 에는 붙지 않고, 편집용
