@@ -59,7 +59,7 @@ export default function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex w-[300px] flex-col">
+    <form onSubmit={handleSubmit} noValidate className="flex w-full min-w-0 flex-col lg:w-[300px]">
       <h1 className="h-[40px] text-[30px] font-bold leading-[40px] text-black">
         로그인
       </h1>

@@ -54,7 +54,9 @@ export default async function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <div className="flex min-h-screen flex-col">
+        {/* dvh 를 쓴다. 모바일 브라우저의 주소창이 접히고 펴질 때 vh(=min-h-screen)는
+            갱신되지 않아 푸터가 화면 밖으로 밀린다 (CLAUDE.md "반응형"). */}
+        <div className="flex min-h-dvh flex-col">
           <main className="flex-1">{children}</main>
           <SiteFooter categories={categories} />
         </div>

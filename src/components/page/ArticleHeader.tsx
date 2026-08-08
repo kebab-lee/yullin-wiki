@@ -57,11 +57,11 @@ export default function ArticleHeader({ page, category }: ArticleHeaderProps) {
   const publishedAt = page.publishedAt ?? page.createdAt;
 
   return (
-    <header className="flex items-start justify-between gap-[20px]">
+    <header className="flex flex-col gap-[16px] lg:flex-row lg:items-start lg:justify-between lg:gap-[20px]">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-[10px]">
+        <div className="flex flex-wrap items-center gap-[10px]">
           {category && <CategoryBadge category={category} />}
-          <h1 className="min-w-0 text-[36px] font-extrabold leading-[45px] text-black">
+          <h1 className="min-w-0 text-[26px] font-extrabold leading-[34px] text-black lg:text-[36px] lg:leading-[45px]">
             {page.title}
           </h1>
         </div>
@@ -75,8 +75,8 @@ export default function ArticleHeader({ page, category }: ArticleHeaderProps) {
         )}
       </div>
 
-      <div className="flex shrink-0 items-start gap-[10px]">
-        <dl className="w-[110px] text-[13px] leading-[20px]">
+      <div className="flex shrink-0 items-start gap-[10px] lg:justify-end">
+        <dl className="w-[110px] shrink-0 text-[13px] leading-[20px]">
           <MetaRow label="게시일" value={formatDate(publishedAt)} />
           <MetaRow label="수정일" value={formatDate(page.updatedAt)} />
           <MetaRow label="작성자" value={page.authorName ?? UNKNOWN_AUTHOR} />

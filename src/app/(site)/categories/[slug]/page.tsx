@@ -53,8 +53,9 @@ export default async function CategoryPage({
 
   return (
     <div className="mx-auto max-w-page">
-      {/* Figma: sidecat x=236(80폭) · lists 1006폭 */}
-      <div className="flex items-start gap-[40px] pb-[100px] pl-[236px] pr-[150px] pt-[60px]">
+      {/* 전체 목록(`/pages`)과 같은 컨테이너다. lg 이상 Figma 그대로,
+          lg 미만은 좌우 16px 패딩 + 네비가 목록 위로. */}
+      <div className="flex flex-col gap-[24px] px-4 pb-[60px] pt-[24px] lg:flex-row lg:items-start lg:gap-[40px] lg:pb-[100px] lg:pl-[236px] lg:pr-[150px] lg:pt-[60px]">
         <CategorySideNav current={{ type: "category", slug }} />
 
         {/* 목록 제목에는 짧은 형(name). 긴 형(fullName)은 푸터 전용이다.

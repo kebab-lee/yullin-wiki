@@ -64,7 +64,7 @@ docs/                       설계 문서
 - 로그인/로그아웃 버튼처럼 헤더와 히어로가 공유하는 조각은
   `src/components/common/`에 두고 양쪽이 같은 컴포넌트를 쓴다 (`AuthActionButton`).
 
-  ## 반응형 / 모바일 규칙
+## 반응형 / 모바일 규칙
 
 - 공개 위키는 모바일 퍼스트로 작성한다.
   기본 스타일이 모바일이고, sm/md/lg에서 확장한다.
@@ -76,11 +76,20 @@ docs/                       설계 문서
   URL로 페이지 상태가 표현되어야 뒤로가기·공유·서버 컴포넌트가 유지되고,
   검색은 유사도 정렬이라 cursor를 쓸 수 없어 목록과 갈라진다.
 - 뷰포트 높이는 dvh를 사용한다. vh 금지.
-- 본문 렌더러의 table/pre 노드는 overflow-x 래퍼로 감싼다.
+- 가로로 넘칠 수 있는 본문 노드는 overflow-x 래퍼로 감싼다.
+  현재 `pre` 는 `globals.css` 의 `.wiki-article pre { overflow-x: auto }` 가 맡고 있고,
+  **Table 확장은 아직 스키마에 없어서(`src/lib/editor/extensions.ts`) `table` 노드가
+  존재할 수 없으므로 래퍼를 미리 만들지 않는다.**
+  Table 확장을 도입하면 `renderContent.ts` 에 `overflow-x` 래퍼를 함께 넣어야 한다.
+  안 넣으면 표 하나가 페이지 전체를 가로 스크롤시킨다.
 - 터치 인터랙션 요소의 최소 크기는 44x44px.
-- next/image 사용 시 sizes 속성을 반드시 명시한다.
+- next/image 로 폭이 가변인 이미지를 렌더링할 때는 sizes 를 명시한다.
+  고정 크기 로고·아이콘에는 효과가 없으므로 붙이지 않는다.
 - 모바일 전용 컴포넌트를 새로 만들지 않는다.
   role 분기 안에서 CSS로 처리한다 (role × device 조합 폭발 방지).
+- **헤더는 `PublicHeaderView` / `AdminHeaderView` 두 벌이지만 둘 다 공개 화면의
+  일부다.** `AdminHeaderView` 는 EDITOR 이상이 공개 위키를 볼 때도 붙으므로
+  (`SiteHeader` 분기), 헤더 반응형 수정은 항상 두 파일에 같이 적용한다.
 
 ## 권한
 

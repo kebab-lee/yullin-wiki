@@ -95,12 +95,12 @@ export default function Pagination({
       : `${basePath}${basePath.includes("?") ? "&" : "?"}page=${page}`;
 
   const arrowClass =
-    "flex h-[24px] w-[24px] items-center justify-center text-gray3 transition-colors hover:text-brand-red";
+    "flex size-11 items-center justify-center text-gray3 transition-colors hover:text-brand-red lg:size-[24px]";
 
   return (
     <nav
       aria-label="페이지 목록"
-      className="mt-[50px] flex h-[24px] items-center justify-center gap-[10px]"
+      className="mt-[40px] flex items-center justify-center gap-[4px] lg:mt-[50px] lg:h-[24px] lg:gap-[10px]"
     >
       {currentPage > 1 ? (
         <Link
@@ -134,7 +134,7 @@ export default function Pagination({
             aria-current={slot === currentPage ? "page" : undefined}
             aria-label={`${slot}페이지`}
             className={[
-              "flex h-[24px] min-w-[24px] items-center justify-center rounded-pill px-[6px]",
+              "flex size-11 min-w-11 items-center justify-center rounded-pill px-[6px] lg:size-auto lg:h-[24px] lg:min-w-[24px]",
               "text-[15px] leading-[24px] transition-colors",
               slot === currentPage
                 ? "bg-category-green2 font-bold text-white"

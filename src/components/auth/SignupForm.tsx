@@ -198,7 +198,7 @@ export default function SignupForm() {
 
   return (
     // Figma Frame 1494 (537x571)
-    <form onSubmit={handleSubmit} noValidate className="w-[537px] shrink-0">
+    <form onSubmit={handleSubmit} noValidate className="w-full min-w-0 lg:w-[537px] lg:shrink-0">
       <h2 className="text-[15px] font-medium leading-[18px] text-black">
         회원정보
       </h2>
@@ -207,7 +207,7 @@ export default function SignupForm() {
       {/* Figma: 구분선 아래 18px 부터 폼 영역(537x517), 행 간격 20px */}
       <div className="mt-[18px] flex flex-col gap-[20px]">
         {/* 아이디 — 인풋 + 중복확인 버튼이 254px 안에 나란히 */}
-        <FormRow label="아이디" htmlFor="loginId" controlWidth="w-[254px]">
+        <FormRow label="아이디" htmlFor="loginId" controlWidth="lg:w-[254px]">
           <div className="flex items-center gap-[8px]">
             <TextField
               label="아이디"
@@ -223,7 +223,7 @@ export default function SignupForm() {
               type="button"
               onClick={handleDuplicateCheck}
               disabled={checking}
-              className="h-[30px] shrink-0 whitespace-nowrap rounded-badge border border-brand-red px-[10px] text-[13px] font-medium leading-[16px] text-brand-red transition-colors hover:bg-brand-red-pink disabled:opacity-50"
+              className="h-11 shrink-0 whitespace-nowrap rounded-badge border border-brand-red lg:h-[30px] px-[10px] text-[13px] font-medium leading-[16px] text-brand-red transition-colors hover:bg-brand-red-pink disabled:opacity-50"
             >
               중복확인
             </button>
@@ -240,7 +240,7 @@ export default function SignupForm() {
         </FormRow>
 
         {/* 비밀번호 — 인풋 2개가 문구 한 줄을 공유한다 (Figma 286x91) */}
-        <FormRow label="비밀번호" htmlFor="password" controlWidth="w-[286px]">
+        <FormRow label="비밀번호" htmlFor="password" controlWidth="lg:w-[286px]">
           <div className="flex flex-col gap-[8px]">
             <TextField
               label="비밀번호"
@@ -271,7 +271,7 @@ export default function SignupForm() {
           )}
         </FormRow>
 
-        <FormRow label="이름" htmlFor="name" controlWidth="w-[140px]">
+        <FormRow label="이름" htmlFor="name" controlWidth="lg:w-[140px]">
           <TextField
             label="이름"
             name="name"
@@ -284,7 +284,7 @@ export default function SignupForm() {
           />
         </FormRow>
 
-        <FormRow label="성별" htmlFor="gender" controlWidth="w-[180px]">
+        <FormRow label="성별" htmlFor="gender" controlWidth="lg:w-[180px]">
           <SelectField
             label="성별"
             name="gender"
@@ -297,7 +297,7 @@ export default function SignupForm() {
           />
         </FormRow>
 
-        <FormRow label="생년월일" htmlFor="birthDate" controlWidth="w-[218px]">
+        <FormRow label="생년월일" htmlFor="birthDate" controlWidth="lg:w-[218px]">
           <TextField
             label="생년월일"
             name="birthDate"
@@ -313,7 +313,7 @@ export default function SignupForm() {
           />
         </FormRow>
 
-        <FormRow label="전화번호" htmlFor="phone" controlWidth="w-[218px]">
+        <FormRow label="전화번호" htmlFor="phone" controlWidth="lg:w-[218px]">
           <TextField
             label="전화번호"
             name="phone"
@@ -331,7 +331,7 @@ export default function SignupForm() {
         </FormRow>
 
         {/* 라디오 그룹은 fieldset 이 스스로 이름을 가지므로 htmlFor 를 걸지 않는다. */}
-        <FormRow label="열린교회 소속" controlWidth="w-[292px]">
+        <FormRow label="열린교회 소속" controlWidth="lg:w-[292px]">
           <RadioGroup
             legend="열린교회 소속"
             name="churchMember"
@@ -353,7 +353,7 @@ export default function SignupForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="mt-[5px] h-[36px] w-[98px] rounded-badge bg-brand-red text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-[5px] h-11 w-full rounded-badge bg-brand-red lg:h-[36px] lg:w-[98px] text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           가입하기
         </button>

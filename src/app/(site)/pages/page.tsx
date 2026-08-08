@@ -38,8 +38,10 @@ export default async function AllPagesPage({
 
   return (
     <div className="mx-auto max-w-page">
-      {/* Figma: sidecat x=236(80폭) · lists 1006폭 */}
-      <div className="flex items-start gap-[40px] pb-[100px] pl-[236px] pr-[150px] pt-[60px]">
+      {/* lg 이상은 Figma 그대로(sidecat x=236(80폭) · lists 1006폭).
+          lg 미만은 좌우 16px 패딩에 네비가 목록 위로 올라간다 —
+          검색 결과·항목별 목록과 같은 컨테이너다. */}
+      <div className="flex flex-col gap-[24px] px-4 pb-[60px] pt-[24px] lg:flex-row lg:items-start lg:gap-[40px] lg:pb-[100px] lg:pl-[236px] lg:pr-[150px] lg:pt-[60px]">
         <CategorySideNav current={{ type: "recent" }} />
 
         <PageList

@@ -51,11 +51,11 @@ export default function SearchResultList({
   return (
     <section className="min-w-0 flex-1">
       {/* 결과 헤더 — Figma 1:944 (🔍 45px + 검색어 x=65 + "전체 검색 결과" x=329) */}
-      <header className="flex items-center gap-[20px]">
-        <span className="text-[45px] leading-[45px]" aria-hidden>
+      <header className="flex flex-wrap items-center gap-x-[12px] gap-y-[6px] lg:flex-nowrap lg:gap-[20px]">
+        <span className="text-[32px] leading-[32px] lg:text-[45px] lg:leading-[45px]" aria-hidden>
           🔍
         </span>
-        <h1 className="min-w-0 truncate text-[28px] font-bold leading-[34px] text-black">
+        <h1 className="min-w-0 truncate text-[22px] font-bold leading-[34px] text-black lg:text-[28px]">
           {/* 시안대로 따옴표로 감싼다. 검색어와 뒤따르는 문구의 경계를 그것만이
               보여준다 — 없으면 "열린교회 전체 검색 결과"가 한 문장으로 읽힌다. */}
           {`"${query}"`}
@@ -72,7 +72,7 @@ export default function SearchResultList({
         // 시안에 0건 화면이 없어 문구를 정했다. "없다"로 끝내지 않고 다음
         // 행동을 준다 — 트라이그램 검색은 오타를 어느 정도 흡수하므로, 결과가
         // 비었다면 대개 검색어가 너무 길거나 좁은 경우다.
-        <div className="mt-[40px] w-[880px] max-w-full">
+        <div className="mt-[40px] w-full max-w-[880px]">
           <p className="text-[18px] leading-[26px] text-black">
             검색 결과가 없습니다.
           </p>
@@ -82,7 +82,7 @@ export default function SearchResultList({
         </div>
       ) : (
         // Figma: 항목 88px · 간격 35px
-        <ul className="mt-[85px] flex w-[880px] max-w-full flex-col gap-[35px]">
+        <ul className="mt-[40px] flex w-full max-w-[880px] flex-col gap-[24px] lg:mt-[85px] lg:gap-[35px]">
           {pages.map((page) => (
             <SearchResultItem
               key={page.id}

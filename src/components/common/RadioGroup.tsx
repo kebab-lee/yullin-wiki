@@ -50,7 +50,7 @@ export default function RadioGroup({
         {options.map((option) => (
           <label
             key={option.value}
-            className="flex h-[30px] cursor-pointer items-center gap-[8px] text-[14px] font-light leading-[17px] text-black"
+            className="flex h-11 cursor-pointer items-center gap-[8px] lg:h-[30px] text-[14px] font-light leading-[17px] text-black"
           >
             <input
               type="radio"
@@ -58,7 +58,7 @@ export default function RadioGroup({
               value={option.value}
               checked={value === option.value}
               onChange={(e) => onChange(e.target.value)}
-              className="h-[16px] w-[16px] shrink-0 accent-brand-red"
+              className="size-[20px] shrink-0 accent-brand-red lg:size-[16px]"
             />
             {option.label}
           </label>

@@ -37,99 +37,116 @@ export default async function HomePage() {
     // Figma Home(1:318)에 Header 인스턴스가 없고 HeroHeaderBar 가 그 역할을 겸한다.
     // 푸터는 전 페이지 공통이라 루트 layout 이 담당한다.
     <div className="bg-white relative w-full">
-      {/* === 히어로 영역 (빨강 배경) — 페이지 최상단에 붙는다 === */}
-      <section className="relative w-full h-[732px] mx-auto max-w-page overflow-hidden">
-        {/* 빨강 배경 박스 (둥근 하단) — Figma Rectangle 613 (x=316 y=0, 880x732) */}
-        <div className="absolute top-0 left-1/2 z-0 -translate-x-1/2 w-hero h-[732px] bg-brand-red rounded-bl-hero rounded-br-hero" />
+      {/* === 히어로 영역 (빨강 배경) — 페이지 최상단에 붙는다 ===
 
-        {/* 장식용 원 — Figma Ellipse 16 (x=373 y=316, 416) : 중심이 프레임 중앙에서 -175px */}
-        <div className="absolute top-[316px] left-1/2 z-0 -translate-x-1/2 -ml-[175px] size-[416px] rounded-full bg-white/10 pointer-events-none" />
-        {/* 장식용 원 — Figma Ellipse 17 (x=623 y=227, 505) : 중심이 프레임 중앙에서 +119.5px */}
-        <div className="absolute top-[227px] left-1/2 z-0 -translate-x-1/2 ml-[119.5px] size-[505px] rounded-full bg-white/10 pointer-events-none" />
+          시안 좌표(top-[199px] 등)를 절대 배치로 옮겨 두면 폭이 줄어도 값이
+          그대로라 좁은 화면에서 통째로 깨진다. 그래서 빨강 박스 자체를 흐름
+          위의 컨테이너로 두고 내부를 세로 flex 로 쌓는다.
 
-        {/* 히어로 헤더바 — Figma Frame 1304 (x=316 y=79, 880x50) */}
-        <HeroHeaderBar role={role} />
+          데스크톱 픽셀은 그대로다:
+            상단 79 + 헤더바(35+15+1=51) = 130  →  mt-69  →  콘텐츠 top 199 */}
+      <section className="mx-auto max-w-page px-4 lg:px-0">
+        {/* Figma Rectangle 613 (x=316 y=0, 880x732) */}
+        <div className="relative mx-auto w-full max-w-hero overflow-hidden rounded-bl-hero rounded-br-hero bg-brand-red">
+          {/* 장식용 원. 흐름에 참여하지 않는 순수 장식이라 절대 배치를 유지한다 —
+              flex 로 옮길 수 있는 요소가 아니다. 좌표는 빨강 박스 기준이고
+              시안값(프레임 중앙 기준 -175 / +119.5)이 그대로 성립한다.
+              lg 미만에서는 박스보다 원이 커져 붉은 면이 얼룩져 보이므로 감춘다. */}
+          <div className="pointer-events-none absolute left-1/2 top-[316px] z-0 -ml-[175px] hidden size-[416px] -translate-x-1/2 rounded-full bg-white/10 lg:block" />
+          <div className="pointer-events-none absolute left-1/2 top-[227px] z-0 ml-[119.5px] hidden size-[505px] -translate-x-1/2 rounded-full bg-white/10 lg:block" />
 
-        {/* 중앙 콘텐츠 */}
-        <div className="absolute top-[199px] left-1/2 z-10 -translate-x-1/2 w-hero-inner flex flex-col items-center gap-[60px]">
-          <div className="flex flex-col items-center gap-10 w-full">
-            {/* 로고 자리 */}
-            {/* <div className="h-[100px] w-[138px] rounded bg-white/30 flex items-center justify-center text-white text-sm">
-             
-            </div> */}
-            <Image
-              src="/brand/logo-footer.svg"
-              alt="열린 위키"
-              width={137}
-              height={100}
-            />
+          <div className="relative z-10 flex flex-col items-center px-4 pb-[50px] pt-[30px] lg:h-[732px] lg:px-10 lg:pb-0 lg:pt-[79px]">
+            {/* 히어로 헤더바 — Figma Frame 1304 (x=316 y=79, 880x50) */}
+            <HeroHeaderBar role={role} />
 
-            {/* 타이틀 */}
-            <div className="flex flex-col items-center justify-center gap-[30px] whitespace-nowrap">
-              <h1 className="text-brand-red-white text-[55px] font-black leading-[22px]">
-                열린 위키
-              </h1>
-              <p className="text-brand-red-pink text-[20px] font-medium leading-[22px]">
-                열린교회에 대한 모든 것
-              </p>
-            </div>
+            {/* 중앙 콘텐츠 — Figma 기준 top=199 */}
+            <div className="mt-[40px] flex w-full flex-col items-center gap-[40px] lg:mt-[69px] lg:w-hero-inner lg:gap-[60px]">
+              <div className="flex w-full flex-col items-center gap-[24px] lg:gap-10">
+                <Image
+                  src="/brand/logo-footer.svg"
+                  alt="열린 위키"
+                  width={137}
+                  height={100}
+                  className="h-auto w-[100px] lg:w-[137px]"
+                />
 
-            {/* 검색창 */}
-            <SearchInput variant="hero" />
-          </div>
+                {/* 타이틀 */}
+                <div className="flex flex-col items-center justify-center gap-[20px] whitespace-nowrap lg:gap-[30px]">
+                  <h1 className="text-brand-red-white text-[40px] font-black leading-[22px] lg:text-[55px]">
+                    열린 위키
+                  </h1>
+                  <p className="text-brand-red-pink text-[16px] font-medium leading-[22px] lg:text-[20px]">
+                    열린교회에 대한 모든 것
+                  </p>
+                </div>
 
-          {/* 외부 링크 영역 */}
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-[10px] text-brand-red-white whitespace-nowrap">
-              <div className="text-[18px] leading-[22px] font-semibold">
-                <p>열린교회에 대해</p>
-                <p>더 알고 싶다면?</p>
+                {/* 검색창 */}
+                <SearchInput variant="hero" />
               </div>
-              <span className="text-[25px] leading-[22px]">→</span>
-            </div>
 
-            <LinkBadge
-              topLabel="열린교회"
-              bottomLabel="공식페이지"
-              href="https://www.yullin.org"
-            />
-            <LinkBadge
-              topLabel="청년부"
-              bottomLabel="인스타그램"
-              href="https://www.instagram.com/yullin_yct"
-            />
-            <LinkBadge
-              topLabel="청년부"
-              bottomLabel="Youtube"
-              href="https://youtube.com/@yullinyouth?si=7_STglS5ddSmRXuT"
-            />
+              {/* 외부 링크 영역 — 좁은 화면에서는 배지가 다음 줄로 접힌다 */}
+              <div className="flex w-full flex-wrap items-center justify-center gap-[16px] lg:flex-nowrap lg:justify-between lg:gap-0">
+                <div className="flex w-full items-center justify-center gap-[10px] text-brand-red-white whitespace-nowrap lg:w-auto lg:justify-start">
+                  <div className="text-[16px] leading-[22px] font-semibold lg:text-[18px]">
+                    <p>열린교회에 대해</p>
+                    <p>더 알고 싶다면?</p>
+                  </div>
+                  <span className="text-[25px] leading-[22px]">→</span>
+                </div>
+
+                <LinkBadge
+                  topLabel="열린교회"
+                  bottomLabel="공식페이지"
+                  href="https://www.yullin.org"
+                />
+                <LinkBadge
+                  topLabel="청년부"
+                  bottomLabel="인스타그램"
+                  href="https://www.instagram.com/yullin_yct"
+                />
+                <LinkBadge
+                  topLabel="청년부"
+                  bottomLabel="Youtube"
+                  href="https://youtube.com/@yullinyouth?si=7_STglS5ddSmRXuT"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* === 콘텐츠 영역 (Figma 1:366, 895x380) === */}
       <section className="mx-auto max-w-page">
-        <div className="mx-auto flex w-content flex-col gap-20 mt-[65px] mb-[160px]">
-          {/* 항목별 둘러보기 (Figma 1:367, h=110) */}
-          <div className="flex h-[110px] items-center justify-between">
+        <div className="mx-auto mb-[80px] mt-[40px] flex w-full max-w-content flex-col gap-[50px] px-4 lg:mb-[160px] lg:mt-[65px] lg:gap-20 lg:px-0">
+          {/* 항목별 둘러보기 (Figma 1:367, h=110)
+
+              lg 미만에서는 한 줄에 셋이 들어가지 않는다. 헤더 · 버튼줄 · 더보기를
+              세로로 쌓고, 버튼줄만 가로 스크롤로 남긴다 (항목 수가 늘어도 깨지지
+              않는 쪽이 줄바꿈보다 낫다). */}
+          <div className="flex flex-col gap-[20px] lg:h-[110px] lg:flex-row lg:items-center lg:justify-between lg:gap-0">
             <SectionHeader
               emoji="📂"
               title="항목별로 둘러보기"
               href="/categories"
             />
-            <CategoryButtonRow categories={categories} />
+
+            {/* `-mx-4 px-4` 는 컨테이너 좌우 패딩을 상쇄해 화면 끝까지 흐르게 한다 */}
+            <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] lg:mx-0 lg:overflow-x-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
+              <CategoryButtonRow categories={categories} />
+            </div>
+
             <MoreButton href="/categories" />
           </div>
 
           {/* 최근 추가된 게시물 (Figma 1:380, h=190) */}
-          <div className="flex h-[190px] items-center justify-between">
+          <div className="flex flex-col gap-[20px] lg:h-[190px] lg:flex-row lg:items-center lg:justify-between lg:gap-0">
             <SectionHeader
               emoji="⏰"
               title="최근 추가된 게시물"
               href="/pages"
             />
 
-            <div className="flex items-center gap-[25px]">
+            <div className="-mx-4 flex items-center gap-[15px] overflow-x-auto px-4 [scrollbar-width:none] lg:mx-0 lg:gap-[25px] lg:overflow-x-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
               {recentPages.length === 0 ? (
                 <p className="text-[16px] text-gray3">
                   아직 등록된 게시물이 없습니다.

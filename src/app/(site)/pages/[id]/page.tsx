@@ -70,8 +70,9 @@ export default async function ArticlePage({
 
   return (
     <div className="mx-auto max-w-page">
-      {/* Figma: 목차 x=209(245폭) · 본문 x=503(800폭) → 사이 간격 49px */}
-      <div className="flex items-start gap-[49px] px-[209px] py-[40px]">
+      {/* lg 이상은 Figma 그대로(목차 x=209(245폭) · 본문 x=503(800폭) → 간격 49px).
+          lg 미만은 좌우 16px 패딩에 목차가 본문 위 접이식으로 내려온다. */}
+      <div className="flex flex-col gap-[20px] px-4 py-[24px] lg:flex-row lg:items-start lg:gap-[49px] lg:px-[209px] lg:py-[40px]">
         <ArticleToc entries={buildToc(page.content)} />
 
         <article className="min-w-0 flex-1">

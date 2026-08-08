@@ -19,10 +19,11 @@ type SiteFooterProps = {
 export default function SiteFooter({ categories }: SiteFooterProps) {
   return (
     <footer className="w-full overflow-hidden bg-brand-red">
-      <div className="mx-auto w-[880px] max-w-full py-[59px]">
-        <div className="flex items-start justify-between">
+      <div className="mx-auto w-full max-w-hero px-4 py-[40px] lg:px-0 lg:py-[59px]">
+        {/* lg 미만에서는 3열이 들어갈 자리가 없다. 같은 순서 그대로 세로로 쌓는다. */}
+        <div className="flex flex-col gap-[40px] lg:flex-row lg:items-start lg:justify-between lg:gap-0">
           {/* 좌: 로고 + 저작권 */}
-          <div className="flex flex-col justify-between self-stretch pt-[10px]">
+          <div className="flex flex-col justify-between gap-[20px] self-stretch pt-[10px] lg:gap-0">
             <div className="flex items-center gap-[15px]">
               <Image
                 src="/brand/logo-footer.svg"
@@ -45,8 +46,8 @@ export default function SiteFooter({ categories }: SiteFooterProps) {
           </div>
 
           {/* 우: 메뉴 영역 */}
-          <div className="flex flex-col items-start gap-10">
-            <div className="flex items-start gap-[60px]">
+          <div className="flex flex-col items-start gap-[30px] lg:gap-10">
+            <div className="flex flex-col items-start gap-[30px] lg:flex-row lg:gap-[60px]">
               {/* 카테고리 — 긴 형(fullName) */}
               <div className="flex flex-col justify-center gap-5">
                 <p className="whitespace-nowrap text-footer-title text-brand-red-white">
@@ -56,7 +57,9 @@ export default function SiteFooter({ categories }: SiteFooterProps) {
                   <Link
                     key={category.slug}
                     href={`/categories/${category.slug}`}
-                    className="whitespace-nowrap text-footer-content text-brand-red-pink hover:text-brand-red-white"
+                    // `-my/py` 짝은 레이아웃을 그대로 둔 채 터치 영역만 44px 로
+                    // 넓힌다 (CLAUDE.md "반응형"). lg 에서는 둘 다 0 으로 돌린다.
+                    className="-my-[14px] whitespace-nowrap py-[14px] text-footer-content text-brand-red-pink hover:text-brand-red-white lg:my-0 lg:py-0"
                   >
                     {category.fullName}
                   </Link>
@@ -76,14 +79,14 @@ export default function SiteFooter({ categories }: SiteFooterProps) {
                     사용자가 되찾아볼 자리가 없어서 전 페이지 공통인 푸터에 둔다. */}
                 <Link
                   href="/policy"
-                  className="text-footer-content text-brand-red-pink hover:text-brand-red-white"
+                  className="-my-[14px] py-[14px] text-footer-content text-brand-red-pink hover:text-brand-red-white lg:my-0 lg:py-0"
                 >
                   이용 안내
                 </Link>
               </div>
 
               {/* SNS */}
-              <div className="flex flex-col items-end gap-5">
+              <div className="flex flex-col items-start gap-5 lg:items-end">
                 <p className="whitespace-nowrap text-footer-title text-brand-red-white">
                   열린교회 SNS
                 </p>
@@ -97,7 +100,7 @@ export default function SiteFooter({ categories }: SiteFooterProps) {
             </div>
 
             {/* 주소 */}
-            <div className="flex items-center gap-5 whitespace-nowrap">
+            <div className="flex flex-col gap-[8px] whitespace-nowrap lg:flex-row lg:items-center lg:gap-5">
               <p className="text-footer-title text-brand-red-white">열린교회 주소</p>
               <p className="text-footer-content text-brand-red-pink">
                 경기 안양시 동안구 흥안대로439번길 31

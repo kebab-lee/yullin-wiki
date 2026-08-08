@@ -16,7 +16,9 @@ export default function CategoryBadge({ category }: CategoryBadgeProps) {
   return (
     <Link
       href={`/categories/${category.slug}`}
-      className="inline-flex h-[32px] items-center gap-[4px] rounded-badge bg-category-green-light px-[12px] text-[14px] leading-[17px] text-category-green-dark transition-opacity hover:opacity-80"
+      // `shrink-0 whitespace-nowrap` — 좁은 화면에서 제목과 한 줄에 놓이면
+      // 배지가 눌려 "공 간" 처럼 두 줄로 쪼개진다.
+      className="inline-flex h-[32px] shrink-0 items-center gap-[4px] whitespace-nowrap rounded-badge bg-category-green-light px-[12px] text-[14px] leading-[17px] text-category-green-dark transition-opacity hover:opacity-80"
     >
       <span aria-hidden>{category.icon}</span>
       {category.name}

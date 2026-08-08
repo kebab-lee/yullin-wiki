@@ -16,36 +16,47 @@ import SearchInput from "@/components/common/SearchInput";
  */
 export default function AdminHeaderView({ role }: { role: Role }) {
   return (
-    <header className="w-full bg-white h-[135px] overflow-hidden">
-      {/* Figma: 1512 프레임 안에서 좌우 209px 여백 → 1094px 중앙 정렬, 상단 71px */}
-      <div className="mx-auto flex w-[1094px] max-w-full items-center justify-between pt-[71px]">
-        {/* 좌: 로고 + 검색 */}
-        <div className="flex items-center justify-center gap-[15px]">
-          <Link href="/admin" className="flex items-center justify-center gap-[10px]">
-            <Image
-              src="/brand/logo-mark.svg"
-              alt="열린위키"
-              width={50}
-              height={36}
-              priority
-            />
-            <span className="whitespace-nowrap text-[30px] font-bold leading-[30px] text-brand-red">
-              열린위키
-            </span>
-            <span className="whitespace-nowrap text-[30px] font-extralight leading-[30px] text-brand-red">
-              관리자
-            </span>
-          </Link>
+    // 이 헤더는 어드민 화면 전용이 아니다 — EDITOR 이상이 **공개 위키**를 볼 때도
+    // 붙는다(SiteHeader 분기). 그래서 반응형은 PublicHeaderView 와 같은 구조를
+    // 그대로 적용한다 (CLAUDE.md "반응형").
+    <header className="w-full bg-white lg:h-[135px] lg:overflow-hidden">
+      {/* 배치 근거는 PublicHeaderView 주석과 동일하다. */}
+      <div className="mx-auto flex w-full max-w-[1094px] flex-wrap items-center gap-x-[15px] gap-y-[14px] px-4 py-[14px] lg:flex-nowrap lg:px-0 lg:py-0 lg:pt-[71px]">
+        {/* 로고 */}
+        <Link
+          href="/admin"
+          className="order-1 flex shrink-0 items-center justify-center gap-[10px]"
+        >
+          <Image
+            src="/brand/logo-mark.svg"
+            alt="열린위키"
+            width={50}
+            height={36}
+            priority
+          />
+          <span className="whitespace-nowrap text-[24px] font-bold leading-[30px] text-brand-red lg:text-[30px]">
+            열린위키
+          </span>
+          <span className="whitespace-nowrap text-[24px] font-extralight leading-[30px] text-brand-red lg:text-[30px]">
+            관리자
+          </span>
+        </Link>
 
+        {/* 검색 — 모바일에서는 자기 줄을 통째로 쓴다 */}
+        <div className="order-3 w-full min-w-0 lg:order-2 lg:w-auto">
           <SearchInput variant="header" />
         </div>
 
         {/* 우: 프로필 + 로그아웃 */}
-        <div className="flex h-[35px] items-center justify-center gap-[10px]">
+        <div className="order-2 ml-auto flex items-center justify-center gap-[10px] lg:order-3 lg:h-[35px]">
           {/* 관리자용 마이페이지를 따로 두지 않는다 (`/admin/mypage` 없음).
               관리자도 회원정보는 같은 화면에서 본다 — 화면을 복제하면 같은 폼을
               두 벌 유지하게 된다 (CLAUDE.md "화면 중복"). */}
-          <Link href="/mypage" aria-label="마이페이지" className="block shrink-0">
+          <Link
+            href="/mypage"
+            aria-label="마이페이지"
+            className="flex size-11 shrink-0 items-center justify-center lg:size-[30px]"
+          >
             <Image src="/icons/profile.svg" alt="" width={30} height={30} />
           </Link>
           <AuthActionButton role={role} />

@@ -12,7 +12,7 @@ export default function MoreButton({ href }: MoreButtonProps) {
   return (
     <Link
       href={href}
-      className="flex shrink-0 flex-col items-center justify-center gap-[10px] pr-[10px]"
+      className="flex shrink-0 flex-col items-center justify-center gap-[10px] self-end pr-[10px] lg:self-auto"
     >
       <svg width="11" height="18" viewBox="0 0 11 18" fill="none" className="text-gray3" aria-hidden>
         <path

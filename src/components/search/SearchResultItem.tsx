@@ -40,7 +40,7 @@ export default function SearchResultItem({
   category,
 }: SearchResultItemProps) {
   return (
-    <li className="flex h-[88px] w-full flex-col justify-center gap-[8px] border-b border-gray2">
+    <li className="flex min-h-[88px] w-full flex-col justify-center gap-[8px] border-b border-gray2 py-[12px] lg:h-[88px] lg:py-0">
       <div className="flex items-center gap-[10px]">
         {category && <CategoryBadge category={category} />}
         <Link

@@ -30,7 +30,11 @@ type CategorySideNavProps = {
 const RECENT_ITEM = { href: "/pages", icon: "⏰", label: "최근" } as const;
 
 /**
- * 세로 네비의 동그란 버튼 한 칸 (80x80).
+ * 네비의 버튼 한 칸.
+ *
+ * - lg 이상: 시안 그대로 80x80 원형(아이콘 위 · 라벨 아래).
+ * - lg 미만: 44px 높이의 가로 칩(아이콘 옆 · 라벨). 원형 80px 를 가로로 늘어놓으면
+ *   375px 화면에서 네 칸 중 두 칸도 안 보인다. 활성 표시는 두 배치가 공유한다.
  *
  * CategoryButton(110x110)을 재사용하지 않는다 — 크기와 링크 대상이 둘 다 다르고
  * ("최근"은 카테고리 경로가 아니다), 한 컴포넌트에 size prop 을 붙이면 홈 시안과
@@ -52,14 +56,15 @@ function SideNavItem({
       href={href}
       aria-current={active ? "page" : undefined}
       className={[
-        "flex size-[80px] shrink-0 flex-col items-center justify-center gap-[4px]",
+        "flex h-11 shrink-0 items-center justify-center gap-[6px] px-[14px] whitespace-nowrap",
+        "lg:size-[80px] lg:flex-col lg:gap-[4px] lg:px-0",
         "rounded-pill border-2 transition-colors",
         active
           ? "border-category-green2 bg-category-green2 text-white"
           : "border-category-green bg-white text-black hover:border-category-green2 hover:bg-category-green2 hover:text-white",
       ].join(" ")}
     >
-      <span className="text-[28px] leading-[28px]" aria-hidden>
+      <span className="text-[20px] leading-[20px] lg:text-[28px] lg:leading-[28px]" aria-hidden>
         {icon}
       </span>
       <span className="text-[14px] font-bold leading-[17px]">{label}</span>
@@ -91,7 +96,15 @@ export default async function CategorySideNav({
   return (
     <nav
       aria-label="항목"
-      className="flex h-[415px] w-[80px] shrink-0 flex-col justify-between"
+      // lg 미만: 본문 위 가로 스크롤 줄. `-mx-4 px-4` 는 컨테이너의 좌우 패딩을
+      //   상쇄해 칩이 화면 끝까지 흘러가게 하면서 첫 칩의 들여쓰기는 남긴다.
+      //   스크롤바는 숨긴다 — 칩 넉 줄에 가로 막대가 붙으면 높이만 먹는다.
+      // lg 이상: 시안(Categories-sidecat 1:600 — 80x415) 그대로 세로 배치.
+      className={[
+        "-mx-4 flex w-full shrink-0 gap-[10px] overflow-x-auto px-4",
+        "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "lg:mx-0 lg:h-[415px] lg:w-[80px] lg:flex-col lg:justify-between lg:gap-0 lg:overflow-x-visible lg:px-0",
+      ].join(" ")}
     >
       {categories.map((category) => (
         <SideNavItem

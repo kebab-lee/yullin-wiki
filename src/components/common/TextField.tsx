@@ -4,12 +4,15 @@ import FieldMessage from "./FieldMessage";
  * 인풋 높이.
  * - `md` 44px : 로그인처럼 인풋만 세로로 쌓이는 화면 (Figma 1:1207)
  * - `sm` 30px : 회원가입처럼 라벨과 한 줄로 붙는 화면 (Figma 1:1194)
+ *
+ * `sm` 은 lg 미만에서 44px 로 늘어난다 — 30px 는 터치 타깃 하한에 못 미친다
+ * (CLAUDE.md "반응형"). 시안 높이는 lg 부터 그대로 적용된다.
  */
 export type FieldSize = "md" | "sm";
 
 export const FIELD_SIZE_CLASS: Record<FieldSize, string> = {
   md: "h-[44px] px-[12px] text-[14px] leading-[17px]",
-  sm: "h-[30px] px-[10px] text-[14px] leading-[17px]",
+  sm: "h-11 px-[10px] text-[14px] leading-[17px] lg:h-[30px]",
 };
 
 export const FIELD_BASE_CLASS =

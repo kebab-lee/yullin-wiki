@@ -140,7 +140,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
 
   return (
     // Figma: 우측 폼 537폭 (회원가입과 같은 폭)
-    <form onSubmit={handleSubmit} noValidate className="w-[537px] shrink-0">
+    <form onSubmit={handleSubmit} noValidate className="w-full min-w-0 lg:w-[537px] lg:shrink-0">
       <h2 className="text-[15px] font-medium leading-[18px] text-black">
         회원정보 수정
       </h2>
@@ -149,23 +149,23 @@ export default function ProfileEditForm({ user }: { user: User }) {
       <div className="mt-[18px] flex flex-col gap-[20px]">
         {/* 아이디 — 읽기 전용. 인풋으로 두지 않는다(고칠 수 없는 칸을 고칠 수
             있는 것처럼 그리면 안 된다). */}
-        <FormRow label="아이디" controlWidth="w-[254px]">
+        <FormRow label="아이디" controlWidth="lg:w-[254px]">
           <p className="flex h-[30px] items-center text-[14px] font-light leading-[17px] text-gray4">
             {user.loginId}
           </p>
         </FormRow>
 
-        <FormRow label="비밀번호" controlWidth="w-[286px]">
+        <FormRow label="비밀번호" controlWidth="lg:w-[286px]">
           <button
             type="button"
             onClick={() => setPasswordOpen(true)}
-            className="h-[30px] rounded-badge border border-brand-red px-[12px] text-[13px] font-medium leading-[16px] text-brand-red transition-colors hover:bg-brand-red-pink"
+            className="h-11 w-full rounded-badge border border-brand-red lg:h-[30px] lg:w-auto px-[12px] text-[13px] font-medium leading-[16px] text-brand-red transition-colors hover:bg-brand-red-pink"
           >
             비밀번호 변경
           </button>
         </FormRow>
 
-        <FormRow label="이름" htmlFor="name" controlWidth="w-[140px]">
+        <FormRow label="이름" htmlFor="name" controlWidth="lg:w-[140px]">
           <TextField
             label="이름"
             name="name"
@@ -178,7 +178,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
           />
         </FormRow>
 
-        <FormRow label="성별" htmlFor="gender" controlWidth="w-[180px]">
+        <FormRow label="성별" htmlFor="gender" controlWidth="lg:w-[180px]">
           <SelectField
             label="성별"
             name="gender"
@@ -191,7 +191,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
           />
         </FormRow>
 
-        <FormRow label="생년월일" htmlFor="birthDate" controlWidth="w-[218px]">
+        <FormRow label="생년월일" htmlFor="birthDate" controlWidth="lg:w-[218px]">
           <TextField
             label="생년월일"
             name="birthDate"
@@ -207,7 +207,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
           />
         </FormRow>
 
-        <FormRow label="전화번호" htmlFor="phone" controlWidth="w-[218px]">
+        <FormRow label="전화번호" htmlFor="phone" controlWidth="lg:w-[218px]">
           <TextField
             label="전화번호"
             name="phone"
@@ -224,7 +224,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
           />
         </FormRow>
 
-        <FormRow label="열린교회 소속" controlWidth="w-[292px]">
+        <FormRow label="열린교회 소속" controlWidth="lg:w-[292px]">
           <RadioGroup
             legend="열린교회 소속"
             name="churchMember"
@@ -245,7 +245,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
         <button
           type="submit"
           disabled={submitting}
-          className="mt-[5px] h-[36px] w-[73px] rounded-badge bg-brand-red text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-[5px] h-11 w-full rounded-badge bg-brand-red lg:h-[36px] lg:w-[73px] text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           수정
         </button>

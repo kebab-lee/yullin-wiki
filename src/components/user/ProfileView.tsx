@@ -21,7 +21,7 @@ const EMPTY_VALUE = "-";
  */
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex h-[30px] items-center">
+    <div className="flex h-[30px] min-w-0 items-center">
       <dt className="w-[90px] shrink-0 text-[14px] font-medium leading-[17px] text-black">
         {label}
       </dt>
@@ -48,9 +48,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 export default function ProfileView({ user }: { user: User }) {
   return (
     // Figma: x=316 → 1512 아트보드에서 880px 중앙 정렬. y=210 은 헤더(131px) 아래 79px.
-    <div className="mx-auto flex w-hero max-w-full gap-[90px] pb-[120px] pt-[79px]">
+    // lg 미만에서는 인사말 위 · 정보 아래로 쌓는다 (수정·탈퇴 화면과 같은 배치).
+    <div className="mx-auto flex w-full max-w-hero flex-col gap-[24px] px-4 pb-[80px] pt-[32px] lg:flex-row lg:gap-[90px] lg:px-0 lg:pb-[120px] lg:pt-[79px]">
       {/* Figma Frame 1500 (195x136) */}
-      <div className="w-[195px] shrink-0">
+      <div className="w-full lg:w-[195px] lg:shrink-0">
         <p className="text-[32px] font-extrabold leading-[45px] text-black">
           {user.name ?? EMPTY_VALUE}님,
         </p>
@@ -67,15 +68,15 @@ export default function ProfileView({ user }: { user: User }) {
             그 화면이 이미 이유를 적어두고 있다. */}
         <Link
           href="/mypage/withdraw"
-          className="mt-[15px] flex h-[26px] w-[97px] items-center justify-center rounded-badge border border-gray2 text-[13px] font-normal leading-[16px] text-gray3 transition-colors hover:border-brand-red hover:text-brand-red"
+          className="mt-[15px] flex h-11 w-[97px] items-center justify-center rounded-badge border border-gray2 lg:h-[26px] text-[13px] font-normal leading-[16px] text-gray3 transition-colors hover:border-brand-red hover:text-brand-red"
         >
           계정 삭제하기
         </Link>
       </div>
 
       {/* Figma Frame 1494 (595x170) */}
-      <div className="w-[595px] shrink-0">
-        <div className="flex h-[24px] items-center justify-between">
+      <div className="w-full min-w-0 lg:w-[595px] lg:shrink-0">
+        <div className="flex min-h-11 items-center justify-between lg:h-[24px] lg:min-h-0">
           <h2 className="text-[15px] font-medium leading-[18px] text-black">
             회원정보
           </h2>
@@ -83,7 +84,7 @@ export default function ProfileView({ user }: { user: User }) {
           {/* Figma: x=535, 60x24 (연필 아이콘 + "수정") */}
           <Link
             href="/mypage/edit"
-            className="flex h-[24px] w-[60px] items-center justify-center gap-[4px] rounded-badge border border-gray2 text-[13px] font-normal leading-[16px] text-gray4 transition-colors hover:border-brand-red hover:text-brand-red"
+            className="flex h-11 w-[60px] items-center justify-center gap-[4px] rounded-badge border border-gray2 lg:h-[24px] text-[13px] font-normal leading-[16px] text-gray4 transition-colors hover:border-brand-red hover:text-brand-red"
           >
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
               <path
@@ -100,8 +101,9 @@ export default function ProfileView({ user }: { user: User }) {
         {/* Figma: y=42 구분선 (595폭) */}
         <hr className="mt-[18px] border-t border-gray2" />
 
-        {/* Figma: y=60, 446x110 — 2열 정보 그리드 (좌열 210 / 우열 236) */}
-        <dl className="mt-[18px] grid w-[446px] grid-cols-[210px_236px] gap-y-[10px]">
+        {/* Figma: y=60, 446x110 — 2열 정보 그리드 (좌열 210 / 우열 236).
+            lg 미만에서는 두 열이 들어가지 않아 1열로 접는다. */}
+        <dl className="mt-[18px] grid w-full grid-cols-1 gap-y-[10px] lg:w-[446px] lg:grid-cols-[210px_236px]">
           <InfoRow label="아이디" value={user.loginId} />
           <InfoRow label="생년월일" value={user.birthDate ?? EMPTY_VALUE} />
 

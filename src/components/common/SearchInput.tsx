@@ -36,7 +36,9 @@ const STYLES: Record<
     placeholder: "열린교회의 크고 작은 이야기",
   },
   header: {
-    form: "h-[35px] w-[418px] rounded-pill bg-brand-red-white px-5 py-[10px]",
+    // 좁은 화면에서는 전폭 + 44px 높이(터치 타깃 하한)로 늘어나고,
+    // lg 부터 시안의 35x418 알약으로 되돌아간다.
+    form: "h-11 w-full rounded-pill bg-brand-red-white px-5 lg:h-[35px] lg:w-[418px] lg:py-[10px]",
     input:
       "text-[18px] font-medium leading-[22px] text-brand-red-muted placeholder:text-brand-red-muted",
     placeholder: "전체 검색",
@@ -108,7 +110,7 @@ export default function SearchInput({
       <button
         type="submit"
         aria-label="검색"
-        className="flex shrink-0 items-center justify-center text-brand-red"
+        className="-mr-2 flex size-11 shrink-0 items-center justify-center text-brand-red lg:mr-0 lg:size-auto"
       >
         {variant === "hero" ? (
           <SearchGlyph />

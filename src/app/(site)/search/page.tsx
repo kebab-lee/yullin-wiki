@@ -45,8 +45,8 @@ export default async function SearchPage({
 
   return (
     <div className="mx-auto max-w-page">
-      {/* Figma: sidecat x=236(80폭) · 결과 프레임 1006폭 — 목록 페이지와 같은 배치 */}
-      <div className="flex items-start gap-[40px] pb-[100px] pl-[236px] pr-[150px] pt-[60px]">
+      {/* 목록 페이지와 같은 컨테이너다 (sidecat x=236(80폭) · 결과 프레임 1006폭). */}
+      <div className="flex flex-col gap-[24px] px-4 pb-[60px] pt-[24px] lg:flex-row lg:items-start lg:gap-[40px] lg:pb-[100px] lg:pl-[236px] lg:pr-[150px] lg:pt-[60px]">
         <CategorySideNav current={{ type: "search" }} />
 
         {resultBody ? (
@@ -65,16 +65,16 @@ export default async function SearchPage({
           // 그냥 눌렀거나 URL 을 직접 연 상태이므로, 화면을 실패로 칠하지 않고
           // 무엇을 하면 되는지만 알려준다. 문구의 정본은 validation 모듈이다.
           <section className="min-w-0 flex-1">
-            <header className="flex items-center gap-[20px]">
-              <span className="text-[45px] leading-[45px]" aria-hidden>
+            <header className="flex flex-wrap items-center gap-x-[12px] gap-y-[6px] lg:flex-nowrap lg:gap-[20px]">
+              <span className="text-[32px] leading-[32px] lg:text-[45px] lg:leading-[45px]" aria-hidden>
                 🔍
               </span>
-              <h1 className="text-[28px] font-bold leading-[34px] text-black">
+              <h1 className="min-w-0 text-[22px] font-bold leading-[34px] text-black lg:text-[28px]">
                 전체 검색
               </h1>
             </header>
 
-            <p className="mt-[40px] text-[18px] leading-[26px] text-gray4">
+            <p className="mt-[24px] text-[16px] leading-[26px] text-gray4 lg:mt-[40px] lg:text-[18px]">
               {validation && !validation.valid
                 ? validation.message
                 : "찾고 싶은 내용을 검색창에 입력해보세요."}

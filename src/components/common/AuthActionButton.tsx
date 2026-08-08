@@ -23,8 +23,12 @@ const VARIANT_CLASS = {
     "border border-white px-[10px] py-[7px] text-[14px] font-medium leading-[15px] text-white",
 } as const;
 
+/**
+ * `min-h-11`(44px)은 모바일 터치 타깃 하한이다 (CLAUDE.md "반응형").
+ * lg 부터는 0 으로 풀어서 시안의 pill 높이(패딩만으로 결정)를 그대로 둔다.
+ */
 const BASE_CLASS =
-  "flex flex-col items-center justify-center whitespace-nowrap rounded-pill";
+  "flex min-h-11 flex-col items-center justify-center whitespace-nowrap rounded-pill lg:min-h-0";
 
 /**
  * 로그인 / 로그아웃 액션 버튼.

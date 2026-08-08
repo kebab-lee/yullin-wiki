@@ -16,11 +16,11 @@ export const metadata: Metadata = {
  */
 export default function SignupPage() {
   return (
-    // Figma: x=316 → 1512 아트보드에서 880px 중앙 정렬.
-    // y=210 은 헤더(131px) 아래 79px.
-    <div className="mx-auto flex w-hero max-w-full gap-[122px] pb-[120px] pt-[79px]">
+    // Figma: x=316 → 1512 아트보드에서 880px 중앙 정렬 (221 + 122 + 537).
+    // y=210 은 헤더(131px) 아래 79px. lg 미만에서는 인사말 위 · 폼 아래로 쌓는다.
+    <div className="mx-auto flex w-full max-w-hero flex-col gap-[24px] px-4 pb-[80px] pt-[32px] lg:flex-row lg:gap-[122px] lg:px-0 lg:pb-[120px] lg:pt-[79px]">
       {/* Figma Frame 1406 (221x90) */}
-      <div className="w-[221px] shrink-0">
+      <div className="w-full lg:w-[221px] lg:shrink-0">
         <h1 className="text-[32px] font-bold leading-[45px] text-black">
           회원가입
         </h1>

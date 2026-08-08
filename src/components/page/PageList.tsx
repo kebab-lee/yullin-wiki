@@ -60,11 +60,11 @@ export default function PageList({
   return (
     <section className="min-w-0 flex-1">
       {/* 목록 헤더 — Figma 1:579 (이모지 45px + 제목 x=65) */}
-      <header className="flex items-center gap-[20px]">
-        <span className="text-[45px] leading-[45px]" aria-hidden>
+      <header className="flex flex-wrap items-center gap-x-[12px] gap-y-[6px] lg:flex-nowrap lg:gap-[20px]">
+        <span className="text-[32px] leading-[32px] lg:text-[45px] lg:leading-[45px]" aria-hidden>
           {emoji}
         </span>
-        <h1 className="text-[28px] font-bold leading-[34px] text-black">
+        <h1 className="min-w-0 text-[22px] font-bold leading-[34px] text-black lg:text-[28px]">
           {title}
         </h1>
         <span className="text-[16px] leading-[22px] text-gray3">{total}개</span>

@@ -199,6 +199,16 @@ body {
   padding-top: 40px;
 }
 
+/* 긴 URL·붙여쓴 영문 한 덩어리가 좁은 화면에서 본문 폭을 밀어내지 않게 한다.
+   `pre` 는 아래에서 overflow-x 로 따로 다루므로 여기서 끊지 않는다.
+
+   `table` 은 대상이 아니다 — 스키마(src/lib/editor/extensions.ts)에 Table
+   확장이 없어서 table 노드가 존재할 수 없다. Table 을 도입하면 CSS 가 아니라
+   renderContent.ts 에 overflow-x 래퍼를 넣어야 한다 (CLAUDE.md "반응형"). */
+.wiki-article :not(pre) {
+  overflow-wrap: anywhere;
+}
+
 /* 목차 앵커로 뛰었을 때 제목이 뷰포트 맨 위에 딱 붙지 않게 띄운다. */
 .wiki-article h1,
 .wiki-article h2,

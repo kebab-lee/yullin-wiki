@@ -80,7 +80,7 @@ export default function WithdrawForm({ loginId }: { loginId: string }) {
 
   return (
     // Figma Frame 1494 (537x245)
-    <div className="w-[537px] shrink-0">
+    <div className="w-full min-w-0 lg:w-[537px] lg:shrink-0">
       <h2 className="text-[15px] font-medium leading-[18px] text-black">
         계정 삭제하기
       </h2>
@@ -88,7 +88,7 @@ export default function WithdrawForm({ loginId }: { loginId: string }) {
       <hr className="mt-[18px] border-t border-gray2" />
 
       {/* 아이디 입력 254x30 */}
-      <div className="mt-[15px] w-[254px]">
+      <div className="mt-[15px] w-full lg:w-[254px]">
         <TextField
           label="아이디"
           name="confirmLoginId"
@@ -104,12 +104,12 @@ export default function WithdrawForm({ loginId }: { loginId: string }) {
       </div>
 
       {/* Figma Frame 1538 (y=45): 라벨 87 + 안내·체크박스 407 */}
-      <div className="mt-[45px] flex items-start">
-        <span className="w-[87px] shrink-0 text-[14px] font-medium leading-[17px] text-black">
+      <div className="mt-[45px] flex flex-col gap-[8px] lg:flex-row lg:items-start lg:gap-0">
+        <span className="w-full text-[14px] lg:w-[87px] lg:shrink-0 font-medium leading-[17px] text-black">
           계정삭제 동의
         </span>
 
-        <div className="w-[407px] shrink-0">
+        <div className="w-full min-w-0 lg:w-[407px] lg:shrink-0">
           <p className="text-[14px] font-light leading-[22px] text-gray4">
             계정 삭제를 진행하면 계정 복구는 불가능합니다.
             <br />
@@ -131,12 +131,12 @@ export default function WithdrawForm({ loginId }: { loginId: string }) {
           </p>
 
           {/* Figma: y=50, 103x30 */}
-          <label className="mt-[20px] flex h-[30px] items-center gap-[8px] text-[14px] font-normal leading-[17px] text-black">
+          <label className="mt-[20px] flex h-11 items-center gap-[8px] lg:h-[30px] text-[14px] font-normal leading-[17px] text-black">
             <input
               type="checkbox"
               checked={agreed}
               onChange={(event) => setAgreed(event.target.checked)}
-              className="h-[16px] w-[16px] accent-brand-red"
+              className="size-[20px] shrink-0 accent-brand-red lg:size-[16px]"
             />
             동의합니다
           </label>
@@ -146,12 +146,12 @@ export default function WithdrawForm({ loginId }: { loginId: string }) {
       {error ? <FieldMessage tone="error">{error}</FieldMessage> : null}
 
       {/* Figma: x=206 y=155, 125x36 */}
-      <div className="mt-[20px] pl-[206px]">
+      <div className="mt-[20px] lg:pl-[206px]">
         <button
           type="button"
           onClick={() => setStep("confirm")}
           disabled={!canSubmit}
-          className="h-[36px] w-[125px] rounded-badge bg-brand-red text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="h-11 w-full rounded-badge lg:h-[36px] lg:w-[125px] bg-brand-red text-[14px] font-medium leading-[17px] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           계정 삭제하기
         </button>
