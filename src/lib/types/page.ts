@@ -7,8 +7,20 @@
 // (supabase/migrations/20260807000000_search_pages.sql).
 // =============================================================
 
-/** pages.status — varchar + CHECK. Java에서는 @Enumerated(EnumType.STRING). */
-export type PageStatus = "DRAFT" | "PUBLISHED";
+/**
+ * pages.status — varchar + CHECK. Java에서는 @Enumerated(EnumType.STRING).
+ *
+ *   DRAFT      작성 중. 아직 발행 전. 공개 화면에 뜨지 않는다.
+ *   PUBLISHED  발행됨. 공개 목록·검색·상세에 노출된다.
+ *   HIDDEN     발행됐으나 운영상 감춤. 공개 노출에서만 빠지고 어드민에는 보인다.
+ *
+ * **삭제는 이 축에 없다.** 지워진 게시물은 deletedAt 이 답한다 — status 는 상태,
+ * deletedAt 은 시각 기록이라 성격이 다르고, "언제 지웠나"를 status 로는 적을 수
+ * 없다 (users 의 WITHDRAWN + deletedAt 과 같은 규칙).
+ *
+ * 값 사이의 이동 규칙은 여기가 아니라 validation/pageStatus.ts 의 전환표가 갖는다.
+ */
+export type PageStatus = "DRAFT" | "PUBLISHED" | "HIDDEN";
 
 /**
  * Tiptap이 내보내는 ProseMirror 문서 JSON.

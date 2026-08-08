@@ -22,6 +22,7 @@ import type {
   UpdatePageData,
 } from "@/lib/types";
 
+import { publicPages } from "./pageFilters";
 import { getSupabase } from "./supabaseClient";
 
 const TABLE = "pages";
@@ -174,15 +175,17 @@ function toSummary(row: PageSummaryRow): PageSummary {
  * 정렬·개수의 전제이기 때문이다. 걸러낼 행을 가져와서 TS 에서 버리면 limit 이
  * 의미를 잃는다. pages_recent_idx 가 이 조건 그대로의 partial 인덱스다.
  *
+ * 조건 자체는 여기 적지 않고 publicPages(pageFilters)에서 받는다 — 같은 조건을
+ * 쓰는 목록이 셋이라 한 곳에만 두어야 어긋나지 않는다.
+ *
  * 반대로 단건 조회(findById)는 상태로 거르지 않는다 — 거기서는 공개 여부가
  * 조회 전제가 아니라 판정 대상이라 service 가 규칙을 갖는다.
  */
 export async function findRecent(limit: number): Promise<PageSummary[]> {
-  const { data, error } = await getSupabase()
-    .from(TABLE)
-    .select(SUMMARY_COLUMNS)
-    .eq("status", "PUBLISHED")
-    .is("deleted_at", null)
+  const query = getSupabase().from(TABLE).select(SUMMARY_COLUMNS);
+  publicPages(query);
+
+  const { data, error } = await query
     // 삭제된 댓글은 카드 배지에서 세지 않는다. 임베디드 필터라 게시물 행 자체는
     // 남고 count 만 줄어든다.
     .eq("comments.status", "VISIBLE")
@@ -212,11 +215,12 @@ export async function findAllPaged(
 ): Promise<{ items: PageSummary[]; total: number }> {
   const from = (page - 1) * size;
 
-  const { data, count, error } = await getSupabase()
+  const query = getSupabase()
     .from(TABLE)
-    .select(SUMMARY_COLUMNS, { count: "exact" })
-    .eq("status", "PUBLISHED")
-    .is("deleted_at", null)
+    .select(SUMMARY_COLUMNS, { count: "exact" });
+  publicPages(query);
+
+  const { data, count, error } = await query
     .eq("comments.status", "VISIBLE")
     .order("published_at", { ascending: false })
     .range(from, from + size - 1)
@@ -243,13 +247,14 @@ export async function findByCategorySlug(
 ): Promise<{ items: PageSummary[]; total: number }> {
   const from = (page - 1) * size;
 
-  const { data, count, error } = await getSupabase()
+  const query = getSupabase()
     .from(TABLE)
     // categories 는 필터용 조인이라 !inner 다. 결과 컬럼은 쓰지 않는다.
-    .select(`${SUMMARY_COLUMNS}, categories!inner(slug)`, { count: "exact" })
+    .select(`${SUMMARY_COLUMNS}, categories!inner(slug)`, { count: "exact" });
+  publicPages(query);
+
+  const { data, count, error } = await query
     .eq("categories.slug", slug)
-    .eq("status", "PUBLISHED")
-    .is("deleted_at", null)
     .eq("comments.status", "VISIBLE")
     .order("published_at", { ascending: false })
     .range(from, from + size - 1)
@@ -294,6 +299,11 @@ type PageSearchRow = {
  * "왜 이 글이 결과에 있는가"가 화면에 드러난다. 자르는 위치가 질의에 달렸으므로
  * 질의를 아는 이 자리에서 자른다 — 대신 plain_text 전체가 API 응답으로 새어
  * 나가지 않는다.
+ *
+ * ⚠️ **공개 조건이 여기 없다.** 함수 본문의 where 절이 publicPages 와 같은 조건
+ * (`status = 'PUBLISHED' and deleted_at is null`)을 갖고 있어서 HIDDEN·DRAFT·
+ * 삭제분은 애초에 결과에 오르지 않는다. 코드로 공유할 수 없는 유일한 사본이므로
+ * pageFilters 를 고칠 때 20260807000000_search_pages.sql 도 함께 본다.
  */
 export async function search(
   query: string,
@@ -333,9 +343,10 @@ export async function search(
 /**
  * id 로 게시물 한 건. 없으면 null.
  *
- * status / deleted_at 으로 거르지 않고 그대로 올린다. "이 게시물을 보여줘도
- * 되는가"는 보는 사람이 누구냐에 따라 갈리는 업무 규칙이라 service 가 판정한다
- * (임시저장 조회는 다음 슬라이스에서 같은 함수를 그대로 재사용한다).
+ * **publicPages 를 쓰지 않는다.** status / deleted_at 으로 거르지 않고 그대로
+ * 올린다 — "이 게시물을 보여줘도 되는가"는 보는 사람이 누구냐에 따라 갈리는
+ * 업무 규칙이라 service 가 판정한다(공개 상세는 isPublic, 수정·상태 전환은
+ * getEditablePage). 여기서 걸러 버리면 어드민이 숨긴 글을 되살릴 수 없다.
  */
 export async function findById(id: string): Promise<PageDetail | null> {
   const { data, error } = await getSupabase()
@@ -556,6 +567,41 @@ export async function update(
 
   // updated_at 은 set_updated_at() 트리거가 채운다. 여기서 now() 를 적어 넣으면
   // 정본이 둘이 된다.
+  return toPageCore(row);
+}
+
+// ── 상태 전환 ─────────────────────────────────────────────────
+/**
+ * status(+ 필요하면 published_at)만 바꾼다.
+ *
+ * **본문 수정(update)과 한 함수로 합치지 않는다.** 두 요청이 건드리는 컬럼이
+ * 겹치지 않고, 합치면 "상태만 바꾸려는데 본문·태그를 전부 실어 보내야 하는"
+ * 계약이 된다. UpdatePageData 에 status 가 없는 것도 같은 이유였다.
+ *
+ * published_at 을 이 함수가 몰래 채우지 않고 인자로 받는 것은 CreatePageData 와
+ * 같은 규칙이다 — "언제 공개되었는가"는 DB 사정이 아니라 업무 규칙이고,
+ * 그 판단은 service 가 한다. null 을 주면 컬럼을 건드리지 않는다(숨김·숨김
+ * 해제는 원래 발행 시각을 그대로 둔다).
+ *
+ * 태그를 안 건드리므로 되돌릴 것도 없다 — 문장이 하나뿐이라 create/update 가
+ * 지고 있던 보상 삭제 문제 자체가 여기엔 없다.
+ */
+export async function updateStatus(
+  id: string,
+  status: PageStatus,
+  publishedAt: string | null,
+): Promise<Page> {
+  const { data: row, error } = await getSupabase()
+    .from(TABLE)
+    .update(
+      publishedAt === null ? { status } : { status, published_at: publishedAt },
+    )
+    .eq("id", id)
+    .select(PAGE_CORE_COLUMNS)
+    .single<PageCoreRow>();
+
+  if (error) throw new Error(`게시물 상태 변경 실패: ${error.message}`);
+
   return toPageCore(row);
 }
 

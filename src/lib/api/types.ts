@@ -7,7 +7,13 @@
 // 이 모양은 백엔드가 Java 로 바뀌어도 유지된다 — 프론트가 안 바뀌는 지점.
 // =============================================================
 
-import type { Category, PageDetail, PageSummary, User } from "@/lib/types";
+import type {
+  Category,
+  PageDetail,
+  PageStatus,
+  PageSummary,
+  User,
+} from "@/lib/types";
 
 /** 실패 응답 바디. 4xx/5xx 는 전부 이 모양이다. */
 export type ApiErrorBody = {
@@ -104,3 +110,13 @@ export type ImageUploadedBody = { url: string };
  * DELETE 는 204 라 바디 타입이 없다.
  */
 export type PageUpdatedBody = { id: string };
+
+/**
+ * PATCH /api/admin/pages/[id]/status — 상태 전환 성공.
+ *
+ * 여기만 id 외에 값을 하나 더 싣는다. 목록에서 버튼 하나를 누른 화면은 이동하지
+ * 않고 제자리에서 배지를 다시 그려야 하는데, 그 값을 응답에서 받지 못하면
+ * 클라이언트가 "PUBLISHED 를 보냈으니 PUBLISHED 겠지"라고 **추측**해서 그린다.
+ * 상태의 정본은 서버다 — 적용된 값을 그대로 돌려준다.
+ */
+export type PageStatusChangedBody = { id: string; status: PageStatus };

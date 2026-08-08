@@ -15,12 +15,23 @@ import { NotFoundError, ValidationError } from "@/lib/errors";
 import * as categoryRepository from "@/lib/repositories/categoryRepository";
 import * as pageRepository from "@/lib/repositories/pageRepository";
 import * as pageRevisionRepository from "@/lib/repositories/pageRevisionRepository";
-import type { Page, PageContent, PageDetail, PageSummary } from "@/lib/types";
+import type {
+  Page,
+  PageContent,
+  PageDetail,
+  PageStatus,
+  PageSummary,
+} from "@/lib/types";
 import {
   CATEGORY_NOT_FOUND,
   parsePageForm,
   type ParsedPageForm,
 } from "@/lib/validation/page";
+import {
+  canTransition,
+  parseCreateStatus,
+  parseStatusChange,
+} from "@/lib/validation/pageStatus";
 import { validateSearchQuery } from "@/lib/validation/search";
 
 /** 홈 "최근 추가된 게시물" 카드 수. Figma 1:380 기준 3장. */
@@ -38,8 +49,11 @@ const NOT_FOUND_PAGE = "게시물을 찾을 수 없습니다.";
 /**
  * 공개 화면에 노출해도 되는 게시물인가.
  *
- * 임시저장(DRAFT)과 삭제분(deleted_at)을 같은 규칙 하나로 가른다. 호출부마다
- * 조건을 적으면 한쪽만 고쳐질 때 목록에는 안 뜨는 글이 상세에서는 열린다.
+ * 임시저장(DRAFT)·숨김(HIDDEN)·삭제분(deleted_at)을 규칙 하나로 가른다. 공개가
+ * 아닌 상태를 열거하지 않고 **공개인 상태만 통과시키는** 모양이라 상태가 늘어도
+ * 이 함수는 안 바뀐다. 목록 쪽의 같은 조건은 publicPages(pageFilters)가 갖는다 —
+ * 조건을 호출부마다 적으면 한쪽만 고쳐질 때 목록에는 안 뜨는 글이 상세에서는
+ * 열린다.
  */
 function isPublic(page: PageDetail): boolean {
   return page.status === "PUBLISHED" && page.deletedAt === null;
@@ -283,9 +297,11 @@ function toPageData(parsed: ParsedPageForm) {
  *
  * 작성 권한은 EDITOR 다. ADMIN 은 hasRole 의 계층 비교로 자연히 통과한다.
  *
- * 임시저장은 이번 범위가 아니므로 PUBLISHED 로 고정한다. status 를 입력에서
- * 받지 않는 것은 의도다 — 클라이언트가 상태를 정하게 두면 "무엇이 공개인가"라는
- * 규칙이 폼으로 내려간다.
+ * **"게시하기"와 "임시저장"이 같은 함수로 온다.** 클라이언트가 보내는 것은
+ * 상태값이 아니라 어느 버튼을 눌렀는가(DRAFT / PUBLISHED)이고, 그것이 무엇을
+ * 뜻하는지는 여기서 정한다 — 발행 시각을 찍을지 말지, 무엇이 공개인지는 계속
+ * 서버의 규칙이다. HIDDEN 은 애초에 파싱에서 걸러진다(발행된 적 없는 글은
+ * 감출 수 없다 — validation/pageStatus 의 전환표와 같은 근거).
  */
 export async function createPage(
   session: SessionPayload | null,
@@ -298,13 +314,17 @@ export async function createPage(
 
   await assertCategoryExists(parsed.value.categoryId);
 
+  const status = parseCreateStatus(input);
+
   return pageRepository.create({
     ...toPageData(parsed.value),
     // **작성자는 입력이 아니라 세션에서 온다.** 클라이언트가 보낸 작성자 값은
     // 신뢰하지 않는다 — 받으면 남의 이름으로 글을 쓸 수 있다.
     authorId: session.userId,
-    status: "PUBLISHED",
-    publishedAt: new Date().toISOString(),
+    status,
+    // 초안은 아직 발행되지 않았으므로 발행 시각이 없다. 나중에 publishPage 가
+    // 그때의 시각을 찍는다 (pages_published_at_chk 가 이 짝을 보증한다).
+    publishedAt: status === "PUBLISHED" ? new Date().toISOString() : null,
   });
 }
 
@@ -372,4 +392,103 @@ export async function deletePage(
   await snapshot(existing, session.userId);
 
   await pageRepository.softDelete(id);
+}
+
+// ── 상태 전환 ─────────────────────────────────────────────────
+// 발행 · 숨김 · 숨김 해제. 셋 다 본문을 건드리지 않고 status 한 칸만 옮긴다.
+//
+// **허용 여부를 if 로 적지 않는다.** 규칙은 validation/pageStatus 의 전환표가
+// 갖고 있고 아래 함수들은 그것을 참조만 한다. 상태가 하나 더 늘 때 고칠 곳이
+// 표 하나로 유지되고, Java 이관 시에도 표가 그대로 옮겨진다.
+//
+// **page_revisions 에 남기지 않는다.** 그 테이블이 담는 것은 (title, content) —
+// 본문의 한 판이다. 상태만 바꾼 요청까지 스냅샷을 뜨면 직전 것과 한 글자도
+// 다르지 않은 행이 쌓여, 이력이 "무엇이 실제로 바뀌었는가"에 답하지 못하게
+// 된다(updatePage 가 검증 뒤에 스냅샷을 두는 것과 같은 이유다). 상태 변경의
+// 추적성은 "누가 언제 감췄는가"를 담는 별도 감사 로그의 일이며, 지금은 pages
+// 행이 현재 상태와 updated_at 까지만 답한다.
+
+/**
+ * 목표 상태로 옮긴다. 세 공개 함수가 공유하는 몸통이다.
+ *
+ * 순서는 updatePage 와 같다: 권한 → 대상 확인 → 규칙 검증 → repository.
+ * 지워진 글은 getEditablePage 가 404 로 막는다 — 삭제는 상태 축이 아니므로
+ * 전환표가 답할 질문이 아니다.
+ *
+ * 실패를 ValidationError 로 던지는 이유: 바디의 `status` 값이 지금 상태에 대해
+ * 잘못되었다는 뜻이라 폼(또는 버튼)이 붙일 자리가 있다. 필드명을 `status` 로
+ * 두어 요청 바디의 키와 같게 한다.
+ */
+async function transition(
+  session: SessionPayload | null,
+  id: string,
+  to: PageStatus,
+): Promise<Page> {
+  assertRole(session, "EDITOR");
+
+  const existing = await getEditablePage(id);
+
+  const allowed = canTransition(existing.status, to);
+  if (!allowed.valid) throw new ValidationError({ status: allowed.message });
+
+  // 발행 시각은 **처음 발행할 때 한 번만** 찍는다. 숨김·숨김 해제는 null 을
+  // 넘겨 컬럼을 건드리지 않는다 — 해제할 때마다 now() 를 찍으면 감췄다 되살린
+  // 글이 새 글인 척 목록 맨 위로 올라온다.
+  const publishedAt =
+    to === "PUBLISHED" && existing.publishedAt === null
+      ? new Date().toISOString()
+      : null;
+
+  return pageRepository.updateStatus(id, to, publishedAt);
+}
+
+/** DRAFT → PUBLISHED. 초안을 내보낸다. */
+export async function publishPage(
+  session: SessionPayload | null,
+  id: string,
+): Promise<Page> {
+  return transition(session, id, "PUBLISHED");
+}
+
+/** PUBLISHED → HIDDEN. 공개 노출에서만 뺀다. 어드민 목록에는 남는다. */
+export async function hidePage(
+  session: SessionPayload | null,
+  id: string,
+): Promise<Page> {
+  return transition(session, id, "HIDDEN");
+}
+
+/** HIDDEN → PUBLISHED. 원래 발행 시각 그대로 제자리에 돌아온다. */
+export async function unhidePage(
+  session: SessionPayload | null,
+  id: string,
+): Promise<Page> {
+  return transition(session, id, "PUBLISHED");
+}
+
+/**
+ * `PATCH /api/admin/pages/[id]/status` 가 부르는 하나의 문.
+ *
+ * 라우트가 현재 상태를 몰라도 되도록 여기서 갈라 준다. 목표가 PUBLISHED 라는
+ * 사실 하나로는 발행(DRAFT→)인지 숨김 해제(HIDDEN→)인지 알 수 없는데, 그 판단에
+ * 필요한 것은 지금 상태이고 그건 DB 를 봐야 안다 — 라우트가 미리 조회해서
+ * 고르게 만들면 비즈니스 규칙이 HTTP 레이어로 샌다.
+ *
+ * publishPage / hidePage / unhidePage 를 따로 남겨 두는 이유는 어드민 목록 UI 가
+ * 곧 이름으로 부를 동작들이기 때문이다(버튼 하나에 함수 하나).
+ */
+export async function changePageStatus(
+  session: SessionPayload | null,
+  id: string,
+  input: unknown,
+): Promise<Page> {
+  // transition 도 첫 줄에서 같은 검사를 하지만, 바디를 좁히기 **전에** 한 번 더
+  // 둔다. 권한 없는 요청에 "알 수 없는 상태입니다"가 나가면 그것만으로 어떤
+  // 값을 받는 API 인지가 새어나간다 (createPage 와 같은 규칙).
+  assertRole(session, "EDITOR");
+
+  const parsed = parseStatusChange(input);
+  if (!parsed.ok) throw new ValidationError({ status: parsed.message });
+
+  return transition(session, id, parsed.status);
 }

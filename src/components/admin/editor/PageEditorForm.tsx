@@ -10,6 +10,7 @@ import type {
   CurrentUserBody,
   PageCreatedBody,
 } from '@/lib/api/types'
+import type { PageStatus } from '@/lib/types'
 import { contentExtensions } from '@/lib/editor/extensions'
 import type { Category, PageDetail } from '@/lib/types'
 import { ALLOWED_IMAGE_TYPES } from '@/lib/validation/upload'
@@ -69,6 +70,15 @@ export default function PageEditorForm(props: PageEditorFormProps) {
   const [tagInput, setTagInput] = useState('')
   const [title, setTitle] = useState(initial?.title ?? '')
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+
+  /**
+   * 임시저장으로 만들어 둔 초안의 id. 두 번째 저장부터는 새 글을 만들지 않고
+   * 이 글을 고친다 — 없으면 누를 때마다 초안이 한 건씩 쌓인다.
+   *
+   * 화면을 떠나면 사라지는 값이라는 점은 의도다. 초안은 이미 서버에 있고
+   * (localStorage 사본이 아니다) 이어 쓰기는 임시저장소 화면이 열 일이다.
+   */
+  const [draftId, setDraftId] = useState<string | null>(null)
 
   // 저장 진행 상태와 에러. saving 은 중복 제출 방지용이다 — 작성에서 두 번
   // 눌리면 같은 글이 두 건 생긴다(멱등키가 없다).
@@ -226,16 +236,76 @@ export default function PageEditorForm(props: PageEditorFormProps) {
 
   // ---- 액션 핸들러 ----
 
-  const handleSaveDraft = () => {
-    if (!title.trim()) {
-      alert('저장을 진행하기 위해서 제목을 입력해주세요.')
-      return
-    }
+  /**
+   * 지금 폼의 값. 저장·임시저장이 같은 모양을 보낸다 — 초안과 발행글의 차이는
+   * 입력의 모양이 아니라 status 하나뿐이다.
+   */
+  const readInput = (): PageFormInput | null => {
+    if (!editor) return null
+    return { title, categoryId, content: editor.getJSON(), tags }
+  }
+
+  /** 서버가 돌려준 실패를 폼에 옮긴다. 세 저장 경로가 같은 처리를 쓴다. */
+  const applyErrorBody = async (response: Response) => {
+    const body = await readErrorBody(response)
+    setErrors(toFieldErrors(body.fields))
+    setFormError(body.message)
+  }
+
+  /**
+   * 임시저장 — status='DRAFT' 로 **서버에** 저장한다.
+   *
+   * 예전에는 localStorage 키 하나에 넣어 두었는데, 그건 브라우저를 바꾸면
+   * 사라지고 서버는 그런 글이 있는 줄도 모르는 저장이었다. 초안은 이제 pages
+   * 행이고 status 축의 한 값이다 (DRAFT → 발행 전 · 공개 노출 없음).
+   *
+   * 검증은 발행과 **같은 규칙**(validatePageForm)이다. 초안이라고 규칙을 풀면
+   * 서버가 같은 함수로 다시 거절하므로 폼만 두 벌이 된다.
+   */
+  const handleSaveDraft = async () => {
+    const input = readInput()
+    if (!input || saving) return
+
+    const found = validatePageForm(input)
+    setErrors(found)
+    setFormError(null)
+    if (Object.keys(found).length > 0) return
+
+    setSaving(true)
     setSaveStatus('saving')
-    const draft = { title, categoryId, tags, content: editor?.getJSON(), savedAt: new Date().toISOString() }
-    localStorage.setItem('wiki-draft', JSON.stringify(draft))
-    setTimeout(() => setSaveStatus('saved'), 500)
-    setTimeout(() => setSaveStatus('idle'), 3000)
+
+    try {
+      // 첫 저장은 만들고(POST), 이후는 그 초안을 고친다(PATCH). 본문 수정은
+      // status 를 건드리지 않으므로 초안은 계속 초안으로 남는다.
+      const response = await fetch(
+        draftId ? `/api/admin/pages/${draftId}` : '/api/admin/pages',
+        {
+          method: draftId ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // status 는 만들 때만 싣는다. 본문 수정(PATCH)은 상태를 건드리지
+          // 않는 요청이고, 상태 전환은 전용 경로(/status)가 따로 있다.
+          body: JSON.stringify(
+            draftId ? input : { ...input, status: 'DRAFT' satisfies PageStatus }
+          ),
+        }
+      )
+
+      if (!response.ok) {
+        await applyErrorBody(response)
+        setSaveStatus('idle')
+        return
+      }
+
+      const { id } = (await response.json()) as PageCreatedBody
+      setDraftId(id)
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+    } catch {
+      setFormError(NETWORK_ERROR)
+      setSaveStatus('idle')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handlePreview = () => {
@@ -258,14 +328,8 @@ export default function PageEditorForm(props: PageEditorFormProps) {
    * 서버가 세션에서 정하고, 수정은 작성자를 아예 건드리지 않는다.
    */
   const handleSubmit = async () => {
-    if (!editor || saving) return
-
-    const input: PageFormInput = {
-      title,
-      categoryId,
-      content: editor.getJSON(),
-      tags,
-    }
+    const input = readInput()
+    if (!input || saving) return
 
     const found = validatePageForm(input)
     setErrors(found)
@@ -274,26 +338,49 @@ export default function PageEditorForm(props: PageEditorFormProps) {
 
     setSaving(true)
 
+    // 고칠 대상이 있으면(수정 화면이거나 임시저장해 둔 초안이 있으면) 새로
+    // 만들지 않고 그 글을 고친다. 초안을 저장해 두고 게시하기를 누른 사용자가
+    // 같은 글을 두 건 만들어서는 안 된다.
+    const targetId = initial?.id ?? draftId
+
     try {
       const response = await fetch(
-        initial ? `/api/admin/pages/${initial.id}` : '/api/admin/pages',
+        targetId ? `/api/admin/pages/${targetId}` : '/api/admin/pages',
         {
-          method: initial ? 'PATCH' : 'POST',
+          method: targetId ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
+          body: JSON.stringify(
+            targetId ? input : { ...input, status: 'PUBLISHED' satisfies PageStatus }
+          ),
         }
       )
 
       if (!response.ok) {
         // 400 은 필드 문구가, 401/403/404 는 폼 단위 문구만 실려 온다.
-        const body = await readErrorBody(response)
-        setErrors(toFieldErrors(body.fields))
-        setFormError(body.message)
+        await applyErrorBody(response)
         setSaving(false)
         return
       }
 
       const { id } = (await response.json()) as PageCreatedBody
+
+      // 초안이었으면 본문을 고치는 것만으로는 아직 공개되지 않는다. 발행은
+      // 상태 전환이라 전용 경로로 한 번 더 부른다 (DRAFT → PUBLISHED).
+      // 이미 공개된 글을 고친 경우(initial)는 상태가 그대로여야 하므로 부르지
+      // 않는다 — 숨김 상태로 고쳤다가 저장했다고 다시 공개되면 안 된다.
+      if (!initial && draftId) {
+        const published = await fetch(`/api/admin/pages/${draftId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'PUBLISHED' satisfies PageStatus }),
+        })
+
+        if (!published.ok) {
+          await applyErrorBody(published)
+          setSaving(false)
+          return
+        }
+      }
       // 이동이 끝날 때까지 버튼을 다시 열지 않는다. 여기서 saving 을 내리면
       // 화면이 바뀌기 전 짧은 틈에 한 번 더 눌린다.
       router.push(`/pages/${id}`)
@@ -425,15 +512,16 @@ export default function PageEditorForm(props: PageEditorFormProps) {
         )}
 
         <div className="ml-auto flex items-center gap-3">
-          {/* 임시저장·미리보기는 작성 화면에만 둔다. 둘 다 아직 로컬 stub 이고
-              (임시저장은 localStorage 키 하나를 쓴다) 이미 저장된 글에 붙이면
-              어느 글의 초안인지 알 수 없는 값이 남는다. */}
+          {/* 임시저장·미리보기는 작성 화면에만 둔다. 이미 발행된 글에 "임시저장"이
+              붙으면 공개된 글을 초안으로 되돌리는 것처럼 보이는데, 그런 전환은
+              허용하지 않는다 (validation/pageStatus 의 전환표).
+              미리보기는 아직 stub 이다. */}
           {!initial && (
             <>
               <button
                 type="button"
-                onClick={handleSaveDraft}
-                disabled={saveStatus === 'saving'}
+                onClick={() => void handleSaveDraft()}
+                disabled={saving || saveStatus === 'saving'}
                 className="px-5 py-2 rounded-full border border-gray2 text-[14px] text-gray3 hover:border-brand-red hover:text-brand-red transition-colors disabled:opacity-50"
               >
                 {saveStatus === 'saving' ? '저장 중...' : '임시저장'}
