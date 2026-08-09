@@ -16,6 +16,7 @@ import * as categoryRepository from "@/lib/repositories/categoryRepository";
 import * as pageRepository from "@/lib/repositories/pageRepository";
 import * as pageRevisionRepository from "@/lib/repositories/pageRevisionRepository";
 import type {
+  AdminPageSummary,
   Page,
   PageContent,
   PageDetail,
@@ -31,6 +32,7 @@ import {
   canTransition,
   parseCreateStatus,
   parseStatusChange,
+  parseStatusFilter,
 } from "@/lib/validation/pageStatus";
 import { validateSearchQuery } from "@/lib/validation/search";
 
@@ -186,6 +188,63 @@ export async function getPage(id: string): Promise<PageDetail> {
   const page = await pageRepository.findById(id);
   if (!page || !isPublic(page)) throw new NotFoundError(NOT_FOUND_PAGE);
   return page;
+}
+
+// ── 어드민 조회 ───────────────────────────────────────────────
+/**
+ * 어드민 관리 목록 한 페이지의 기본 건수.
+ *
+ * 공개 목록(10)보다 큰 이유는 줄의 성격이 달라서다. 공개 목록의 한 줄은 제목 +
+ * 발췌 + 태그가 쌓인 카드지만 관리 목록의 한 줄은 표의 한 행이라 훨씬 낮다.
+ * 같은 10 을 쓰면 화면 절반이 비고, 운영자가 상태를 훑는 데 페이지를 두 배로
+ * 넘겨야 한다.
+ */
+const DEFAULT_ADMIN_PAGE_SIZE = 20;
+
+/**
+ * 어드민 위키 관리 목록 (`/admin/pages`).
+ *
+ * **assertRole 이 첫 줄이다.** 파라미터를 다듬는 것조차 그 뒤다 — 권한 없는
+ * 요청에 응답 모양이 조금이라도 새어나가면 안 된다는 규칙은 createPage 와 같다.
+ * 기준이 EDITOR 인 것은 화면 가드(requireRole("EDITOR"))와 같은 선이고,
+ * ADMIN 은 hasRole 의 계층 비교로 자연히 통과한다.
+ *
+ * **이 가드는 화면 가드를 대체하지 않는다.** API 는 페이지를 거치지 않고 직접
+ * 호출되므로 여기가 필요하고, 반대로 여기만으로는 화면이 그려지는 것을 못 막는다
+ * (CLAUDE.md "권한" — 둘 다 필요하다).
+ *
+ * status 를 좁히는 일은 validation 이 한다. 모르는 값은 에러가 아니라 "전체"로
+ * 접힌다 (parseStatusFilter 주석). 실제로 적용된 status 를 되돌려주는 것은
+ * page/size 와 같은 이유다 — **요청값이 아니라 적용값이 화면의 정본**이라야
+ * 필터 탭이 자기가 눌린 줄 아는 것과 서버가 실제로 거른 것이 어긋나지 않는다.
+ */
+export async function listPagesForAdmin(
+  session: SessionPayload | null,
+  params: { status?: unknown; page?: number; size?: number } = {},
+): Promise<{
+  items: AdminPageSummary[];
+  total: number;
+  page: number;
+  size: number;
+  status: PageStatus | null;
+}> {
+  assertRole(session, "EDITOR");
+
+  const status = parseStatusFilter(params.status);
+  const window = {
+    page: positiveInt(params.page, 1),
+    size: boundedSize(params.size, DEFAULT_ADMIN_PAGE_SIZE),
+  };
+
+  const { items, total } = await pageRepository.findForAdmin({
+    ...window,
+    status,
+  });
+
+  // 계약에서는 "필터 없음"을 undefined 가 아니라 null 로 답한다. JSON 은
+  // undefined 를 직렬화하면서 키를 통째로 지워버려, 클라이언트가 "전체 목록"과
+  // "이 서버는 status 를 모른다"를 구분할 수 없게 된다.
+  return { items, total, ...window, status: status ?? null };
 }
 
 // ── 작성 ──────────────────────────────────────────────────────

@@ -41,6 +41,20 @@ const ALLOWED: Readonly<Record<PageStatus, readonly PageStatus[]>> = {
   HIDDEN: ["PUBLISHED"],
 };
 
+/**
+ * from 에서 갈 수 있는 상태들. 위 표를 **읽기만** 한다.
+ *
+ * 어드민 목록이 "이 줄에 어떤 버튼을 그릴 것인가"를 물을 때 쓴다. 화면이
+ * `status === 'DRAFT' ? '게시' : …` 로 적으면 전환 규칙의 사본이 UI 에 생기고,
+ * 표를 고쳐도 버튼은 그대로 남는다 — 허용되지 않는 전환 버튼이 화면에 남아
+ * 누르면 400 이 오는 상태가 된다.
+ *
+ * 자기 자신은 표에 없으므로 여기서도 나오지 않는다 (canTransition 과 일관).
+ */
+export function allowedTransitions(from: PageStatus): readonly PageStatus[] {
+  return ALLOWED[from];
+}
+
 export type TransitionResult =
   | { readonly valid: true }
   | { readonly valid: false; readonly message: string };
@@ -101,6 +115,29 @@ export function parseStatusChange(body: unknown): StatusChangeParseResult {
   return isChangeable(source.status)
     ? { ok: true, status: source.status }
     : { ok: false, message: STATUS_UNKNOWN };
+}
+
+// ── 목록 필터 ─────────────────────────────────────────────────
+/**
+ * 어드민 목록의 `?status=` 를 좁힌다. 값이 없거나 모르는 값이면 undefined =
+ * "전체" 다.
+ *
+ * **ValidationError 로 던지지 않는다.** page/size 를 안전한 값으로 접는 것과 같은
+ * 이유다 (pageService.positiveInt) — 이건 사용자가 채운 입력 칸이 아니라 화면이
+ * 붙이는 파라미터라, 틀렸을 때 문구를 붙일 자리가 없다. `?status=오타` 로 들어온
+ * 링크가 에러 화면 대신 전체 목록을 보여주는 편이 화면을 덜 깨뜨린다.
+ *
+ * **CHANGEABLE_STATUSES 를 재사용하지 않는다.** 저쪽은 "요청이 지정할 수 있는
+ * 목표 상태"라 DRAFT 가 빠져 있는데, 필터는 반대로 DRAFT 를 반드시 포함해야 한다 —
+ * 임시저장 글만 골라 보는 것이 이 화면의 주 용도다. 겹쳐 보인다고 합치면
+ * "임시저장" 탭이 조용히 사라진다.
+ */
+export function parseStatusFilter(value: unknown): PageStatus | undefined {
+  return isPageStatus(value) ? value : undefined;
+}
+
+function isPageStatus(value: unknown): value is PageStatus {
+  return typeof value === "string" && value in ALLOWED;
 }
 
 // ── 작성 시점의 상태 ──────────────────────────────────────────

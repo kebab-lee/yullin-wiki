@@ -13,6 +13,7 @@
 
 import { cutAroundQuery, EXCERPT_LENGTH } from "@/lib/search/excerpt";
 import type {
+  AdminPageSummary,
   CreatePageData,
   Page,
   PageContent,
@@ -22,7 +23,7 @@ import type {
   UpdatePageData,
 } from "@/lib/types";
 
-import { publicPages } from "./pageFilters";
+import { adminPages, publicPages } from "./pageFilters";
 import { getSupabase } from "./supabaseClient";
 
 const TABLE = "pages";
@@ -40,6 +41,20 @@ const SEARCH_FUNCTION = "search_pages";
  */
 const SUMMARY_COLUMNS =
   "id, title, category_id, plain_text, published_at, page_tags(tags(name)), comments(count)";
+
+/**
+ * 어드민 관리 목록용 select.
+ *
+ * **SUMMARY_COLUMNS 를 재사용하지 않는다.** 두 목록이 그리는 것이 달라서 필요한
+ * 컬럼도 겹치지 않는다 — 관리 목록에는 plain_text(발췌)·태그·댓글 수가 필요 없고,
+ * 대신 공개 목록이 안 싣는 status · created_at · updated_at · 작성자명이 필요하다.
+ * 한 상수로 합치면 두 화면 모두 쓰지 않는 컬럼을 매 요청 실어 나른다.
+ *
+ * page_tags · comments 임베디드 조회가 빠진 것도 같은 이유다. 조인이 둘 사라져서
+ * 목록 한 페이지가 pages ⋈ users 한 번으로 끝난다.
+ */
+const ADMIN_SUMMARY_COLUMNS =
+  "id, title, category_id, status, created_at, updated_at, author:users(name)";
 
 /**
  * 상세용 select. 여기서만 content 를 싣는다.
@@ -110,6 +125,17 @@ type PageSummaryRow = {
   comments: CommentCountRows;
 };
 
+type AdminPageSummaryRow = {
+  id: string;
+  title: string;
+  category_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  // PageRow.author 와 같은 이유로 행 자체가 아니라 name 만 nullable 이다.
+  author: { name: string | null } | null;
+};
+
 // ── 변환 ──────────────────────────────────────────────────────
 function toExcerpt(plainText: string): string {
   const text = plainText.trim();
@@ -164,6 +190,18 @@ function toSummary(row: PageSummaryRow): PageSummary {
     excerpt: toExcerpt(row.plain_text),
     commentCount: toCommentCount(row.comments),
     publishedAt: row.published_at,
+  };
+}
+
+function toAdminSummary(row: AdminPageSummaryRow): AdminPageSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    categoryId: row.category_id,
+    status: row.status as PageStatus,
+    authorName: row.author?.name ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -263,6 +301,56 @@ export async function findByCategorySlug(
   if (error) throw new Error(`카테고리 게시물 조회 실패: ${error.message}`);
 
   return { items: (data ?? []).map(toSummary), total: count ?? 0 };
+}
+
+/**
+ * 어드민 위키 관리 목록 한 페이지 + 전체 건수 (`/admin/pages`).
+ *
+ * **publicPages 를 쓰지 않는다.** 공개 조건(`status = 'PUBLISHED'`)이 걸리면
+ * 관리 목록에서 초안과 숨긴 글이 통째로 사라져서, 숨긴 글을 되살릴 방법도
+ * 초안을 발행할 방법도 화면에서 없어진다. 여기 거는 조건은 **삭제분 제외
+ * 하나뿐**이고(adminPages), status 는 거르는 조건이 아니라 호출부가 고르는
+ * 파라미터다.
+ *
+ * status 를 optional 로 받는 것이 그 구분이다:
+ *   undefined → 전체 (DRAFT · PUBLISHED · HIDDEN 을 모두 싣는다)
+ *   값이 있으면 → 그 상태만
+ * 기본값을 PUBLISHED 같은 것으로 두지 않는다. 관리 화면의 기본은 "전부 보기"이며,
+ * 기본값이 무엇이냐는 화면의 규칙이라 repository 가 정할 일이 아니다.
+ *
+ * 정렬이 published_at 이 아니라 **updated_at 내림차순**인 것도 공개 목록과 다른
+ * 지점이다. 초안은 published_at 이 null 이라 발행순으로 정렬하면 목록 맨 끝으로
+ * 몰리는데, 관리 화면에서 가장 먼저 봐야 할 것이 바로 그 손대던 글이다.
+ */
+export async function findForAdmin({
+  status,
+  page,
+  size,
+}: Pagination & { status?: PageStatus }): Promise<{
+  items: AdminPageSummary[];
+  total: number;
+}> {
+  const from = (page - 1) * size;
+
+  const query = getSupabase()
+    .from(TABLE)
+    .select(ADMIN_SUMMARY_COLUMNS, { count: "exact" });
+
+  // 삭제분 제외. 조건의 정본은 pageFilters 다 — 여기에 `is("deleted_at", null)`
+  // 을 손으로 적으면 "무엇이 어드민에게 보이는가"의 사본이 하나 더 생긴다.
+  adminPages(query);
+
+  // status 는 위 필터가 아니라 이 자리에서 붙는다. 조건이 아니라 선택이기 때문이다.
+  if (status) query.eq("status", status);
+
+  const { data, count, error } = await query
+    .order("updated_at", { ascending: false })
+    .range(from, from + size - 1)
+    .returns<AdminPageSummaryRow[]>();
+
+  if (error) throw new Error(`어드민 게시물 목록 조회 실패: ${error.message}`);
+
+  return { items: (data ?? []).map(toAdminSummary), total: count ?? 0 };
 }
 
 /**

@@ -8,11 +8,15 @@
 // =============================================================
 
 import type {
+  AdminPageSummary,
+  AdminUserSummary,
   Category,
   PageDetail,
   PageStatus,
   PageSummary,
+  Role,
   User,
+  UserStatus,
 } from "@/lib/types";
 
 /** 실패 응답 바디. 4xx/5xx 는 전부 이 모양이다. */
@@ -83,6 +87,26 @@ export type CurrentUserBody = { user: User };
 export type MyProfileBody = { user: User };
 
 /**
+ * GET /api/admin/pages?status=&page=&size= — 어드민 위키 관리 목록.
+ *
+ * **PagedPageListBody 와 합치지 않는다.** 실리는 모델부터 다르고
+ * (AdminPageSummary vs PageSummary — 그 둘을 나눈 근거는 types/page.ts 에 있다),
+ * 이쪽만 status 를 되돌려준다. 한 타입으로 묶으면 공개 목록 응답에도 status 칸이
+ * 생겨서 "공개 목록에 상태 필터가 있다"는 없는 계약이 만들어진다.
+ *
+ * `status: null` 은 "필터 없음(전체)" 이다. 요청한 값이 아니라 **서버가 실제로
+ * 적용한 값**이라 `?status=오타` 로 들어와도 화면의 필터 탭이 서버와 같은 것을
+ * 가리킨다 (page/size 를 되돌려주는 것과 같은 규칙).
+ */
+export type AdminPageListBody = {
+  pages: AdminPageSummary[];
+  total: number;
+  page: number;
+  size: number;
+  status: PageStatus | null;
+};
+
+/**
  * POST /api/admin/pages — 발행 성공.
  *
  * 방금 만든 게시물을 통째로 돌려주지 않는다. 에디터가 성공 후에 하는 일은
@@ -120,3 +144,37 @@ export type PageUpdatedBody = { id: string };
  * 상태의 정본은 서버다 — 적용된 값을 그대로 돌려준다.
  */
 export type PageStatusChangedBody = { id: string; status: PageStatus };
+
+/**
+ * GET /api/admin/users?role=&status=&page=&size= — 어드민 사용자 관리 목록.
+ *
+ * **User 가 아니라 AdminUserSummary 를 싣는다.** 목록이 그리는 다섯 칸만 나가고
+ * 전화번호·생년월일·성별은 계약에 없다 — 근거는 types/user.ts 에 있다.
+ *
+ * `/admin/users` 와 `/admin/admins` 가 **같은 응답을 쓴다.** 두 화면은 role 필터의
+ * 기본값과 제목만 다른 같은 목록이라, 계약을 갈라 두면 없는 차이가 생긴다.
+ *
+ * `role: null` · `status: null` 은 "필터 없음(전체)" 이다. 요청한 값이 아니라
+ * 서버가 실제로 적용한 값이라 `?role=오타` 로 들어와도 화면의 필터 탭이 서버와
+ * 같은 것을 가리킨다 (AdminPageListBody 와 같은 규칙).
+ */
+export type AdminUserListBody = {
+  users: AdminUserSummary[];
+  total: number;
+  page: number;
+  size: number;
+  role: Role | null;
+  status: UserStatus | null;
+};
+
+/**
+ * PATCH /api/admin/users/[id]/role — 역할 변경 성공.
+ *
+ * 적용된 역할을 되돌려준다. 목록에서 셀렉트를 바꾼 화면은 이동하지 않고 제자리에
+ * 남는데, 이 값이 없으면 클라이언트가 "ADMIN 을 보냈으니 ADMIN 이겠지"라고
+ * 추측해서 그린다 — 역할의 정본은 서버다 (PageStatusChangedBody 와 같은 근거).
+ *
+ * 바뀐 사용자를 통째로 돌려주지 않는다. 목록이 다시 그려야 하는 칸은 역할 하나뿐이고,
+ * 그 외의 필드를 실으면 목록 응답에서 애써 뺀 PII 가 이쪽으로 새어 나간다.
+ */
+export type UserRoleChangedBody = { id: string; role: Role };

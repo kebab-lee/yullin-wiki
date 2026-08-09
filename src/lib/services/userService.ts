@@ -9,18 +9,27 @@
 // 적으면 한쪽만 고쳐질 때 가입과 중복확인 버튼의 답이 갈린다.
 // =============================================================
 
-import { assertAuthenticated } from "@/lib/auth/guards";
+import { assertAuthenticated, assertRole } from "@/lib/auth/guards";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import type { Role } from "@/lib/auth/roles";
 import type { SessionPayload } from "@/lib/auth/session";
 import {
   ConflictError,
   ForbiddenError,
+  NotFoundError,
   UnauthorizedError,
   ValidationError,
 } from "@/lib/errors";
 import * as userRepository from "@/lib/repositories/userRepository";
 import type { UserWithHash } from "@/lib/repositories/userRepository";
-import type { User } from "@/lib/types";
+import type { AdminUserSummary, User, UserStatus } from "@/lib/types";
+import {
+  ROLE_SELF_CHANGE,
+  ROLE_WITHDRAWN_TARGET,
+  USER_NOT_FOUND,
+  parseRoleFilter,
+  parseUserStatusFilter,
+} from "@/lib/validation/userAdmin";
 import {
   CURRENT_PASSWORD_INVALID,
   LOGIN_ID_TAKEN,
@@ -245,4 +254,136 @@ export async function withdrawMe(
   }
 
   await userRepository.withdraw(session.userId);
+}
+
+// ── 관리자용 ──────────────────────────────────────────────────
+// 여기부터는 위의 "내 정보" 구역과 반대로 **남의 id 를 다룬다.** 그래서 구역을
+// 갈라 두고, 모든 함수가 assertRole(session, "ADMIN") 으로 시작한다. 두 구역이
+// 한 파일에 있어도 섞이지 않는 이유는 위쪽 함수들이 id 파라미터를 아예 받지
+// 않기 때문이다 — 관리자용 함수를 추가할 때 위 구역에 넣지 마라.
+
+/** 사용자 목록 한 페이지의 기본 건수. 어드민 게시물 목록과 같은 20 이다. */
+const DEFAULT_ADMIN_USER_PAGE_SIZE = 20;
+
+/** 한 번에 실어 나를 수 있는 최대 건수. 임의로 큰 size 를 막는다. */
+const MAX_USER_PAGE_SIZE = 50;
+
+function positiveInt(value: number | undefined, fallback: number): number {
+  if (value === undefined || !Number.isFinite(value)) return fallback;
+  return Math.max(Math.trunc(value), 1);
+}
+
+/**
+ * 사용자 관리 목록 (`/admin/users` · `/admin/admins`).
+ *
+ * **assertRole 이 첫 줄이다.** 파라미터를 다듬는 것조차 그 뒤다 — 권한 없는
+ * 요청에 응답 모양이 조금이라도 새어나가면 안 된다 (pageService 와 같은 규칙).
+ *
+ * **기준이 ADMIN 이다.** 위키 관리(EDITOR)와 선이 다르다. EDITOR 는 글을 다루는
+ * 역할이고 계정은 다루지 않는다 — 여기가 뚫리면 EDITOR 가 전 회원의 아이디와
+ * 가입일을 열람하고, 역할 변경까지 같은 화면에 붙어 있어 스스로를 ADMIN 으로
+ * 올릴 수 있다. 화면 가드(requireRole("ADMIN"))와 같은 선이며, 그쪽이 이 가드를
+ * 대체하지 않는다 (API 는 화면을 거치지 않는다).
+ *
+ * **두 화면이 같은 함수를 쓴다.** /admin/admins 는 role 필터를 ADMIN 으로 고정해
+ * 부르는 같은 목록일 뿐이고, 그 기본값은 화면이 정한다 (CLAUDE.md "화면 중복" —
+ * 라우트를 복제하지 않는다는 규칙과 같은 결).
+ *
+ * 필터 값을 여기서 던지지 않고 접는 이유와, 적용된 값을 되돌려주는 이유는
+ * validation/userAdmin 주석에 있다.
+ */
+export async function listUsersForAdmin(
+  session: SessionPayload | null,
+  params: { role?: unknown; status?: unknown; page?: number; size?: number } = {},
+): Promise<{
+  items: AdminUserSummary[];
+  total: number;
+  page: number;
+  size: number;
+  role: Role | null;
+  status: UserStatus | null;
+}> {
+  assertRole(session, "ADMIN");
+
+  const role = parseRoleFilter(params.role);
+  const status = parseUserStatusFilter(params.status);
+  const window = {
+    page: positiveInt(params.page, 1),
+    size: Math.min(
+      positiveInt(params.size, DEFAULT_ADMIN_USER_PAGE_SIZE),
+      MAX_USER_PAGE_SIZE,
+    ),
+  };
+
+  const { items, total } = await userRepository.findUsersForAdmin({
+    ...window,
+    role,
+    status,
+  });
+
+  // "필터 없음"은 undefined 가 아니라 null 로 답한다. JSON 은 undefined 를
+  // 직렬화하면서 키를 통째로 지워버려, 클라이언트가 "전체"와 "이 서버는 role 을
+  // 모른다"를 구분할 수 없게 된다 (listPagesForAdmin 과 같은 규칙).
+  return { items, total, ...window, role: role ?? null, status: status ?? null };
+}
+
+/**
+ * 다른 사용자의 역할을 바꾼다 (승격 · 강등).
+ *
+ * 순서에 규칙이 있다.
+ *   ① 권한 — ADMIN 만.
+ *   ② 자기 자신인가 — **대상을 조회하기도 전에** 막는다. 판정에 DB 값이 필요
+ *      없으므로 질의를 낭비할 이유가 없고, 세션 id 와 경로의 id 를 맞대 보는
+ *      것이 이 규칙의 전부다.
+ *   ③ 대상이 있는가 — 없으면 404.
+ *   ④ 탈퇴 계정인가 — 거절.
+ *   ⑤ UPDATE.
+ *
+ * ── ② 자기 자신 금지가 이 함수의 안전장치다 ──────────────────
+ * 마지막 ADMIN 이 스스로를 강등하면 승격을 실행할 사람이 사라져서, 되돌리는
+ * 경로가 DB 직접 수정밖에 남지 않는다. 관리자 계정은 애초에 DB 에서 손으로
+ * 만들어지므로(CLAUDE.md "인증") 그 상태는 "복구 불가"는 아니지만 화면 밖의
+ * 일이 된다.
+ *
+ * **"마지막 ADMIN 인가"를 세지 않는다.** 세는 순간 그 SELECT 와 UPDATE 사이에
+ * 다른 관리자가 같은 요청을 보내면 둘 다 통과한다(TOCTOU) — 카운트가 1보다
+ * 크다고 답한 두 요청이 나란히 강등을 실행하면 관리자가 0명이 된다. 잠금이나
+ * 조건부 UPDATE 를 들이는 대신, 자기 자신 금지 규칙 하나로 끝낸다: 아무도
+ * 자기를 강등할 수 없으면 마지막 한 명은 구조적으로 남는다. 탈퇴 슬라이스
+ * (withdrawMe)에서 이미 같은 판단을 했다.
+ *
+ * ── ④ 탈퇴 계정 ────────────────────────────────────────────
+ * 탈퇴는 되돌릴 수 없는 종점이다(soft delete, PII 는 이미 NULL). 그 계정의
+ * 역할을 올리면 로그인도 못 하는 유령 관리자가 목록에 남고, 나중에 상태만
+ * 되살리는 경로가 생기면 아무도 의도하지 않은 권한이 함께 깨어난다.
+ * BLOCKED 는 막지 않는다 — 차단은 되돌릴 수 있는 상태이고, 차단된 편집자의
+ * 권한을 거두는 것이 오히려 자연스러운 조작이다.
+ *
+ * 실패를 ValidationError 가 아니라 ForbiddenError 로 던지는 것은 둘 다 입력 칸의
+ * 문제가 아니라 **대상의 상태·정체 때문에 허용되지 않는 조작**이기 때문이다
+ * (withdrawMe 의 ADMIN 탈퇴 금지와 같은 종류).
+ */
+export async function changeUserRole(
+  session: SessionPayload | null,
+  targetUserId: string,
+  newRole: Role,
+): Promise<User> {
+  assertRole(session, "ADMIN");
+
+  if (session.userId === targetUserId) {
+    throw new ForbiddenError(ROLE_SELF_CHANGE);
+  }
+
+  const target = await userRepository.findById(targetUserId);
+  if (!target) throw new NotFoundError(USER_NOT_FOUND);
+
+  if (target.status === "WITHDRAWN") {
+    throw new ForbiddenError(ROLE_WITHDRAWN_TARGET);
+  }
+
+  // 같은 역할로의 변경을 따로 막지 않는다. 게시물 상태 전환과 달리(전환표가
+  // 자기 자신을 거절한다) 여기에는 "아무 일도 안 일어났다"를 화면이 알아야 할
+  // 이유가 없다 — 셀렉트는 값이 바뀔 때만 요청을 보내고, 결과 화면은 어느
+  // 쪽이든 같다.
+  return userRepository.updateRole(targetUserId, newRole);
 }

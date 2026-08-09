@@ -21,6 +21,26 @@ export type Gender = "MALE" | "FEMALE";
 
 export type UserStatus = "ACTIVE" | "BLOCKED" | "WITHDRAWN";
 
+/**
+ * 상태 값의 목록. users_status_chk 와 같은 순서·같은 값이다.
+ *
+ * 목록이 필요한 이유는 어드민 사용자 관리의 상태 필터다 — 화면이 `["ACTIVE", …]`
+ * 를 손으로 적으면 값이 하나 늘 때 탭에서 조용히 빠진다 (ROLES 와 같은 규칙).
+ */
+export const USER_STATUSES: readonly UserStatus[] = [
+  "ACTIVE",
+  "BLOCKED",
+  "WITHDRAWN",
+];
+
+/** 밖에서 들어온 문자열이 UserStatus 인가. isGender 와 같은 용도다. */
+export function isUserStatus(value: unknown): value is UserStatus {
+  return (
+    typeof value === "string" &&
+    (USER_STATUSES as readonly string[]).includes(value)
+  );
+}
+
 export const GENDERS: readonly Gender[] = ["FEMALE", "MALE"];
 
 /** 성별 표시명. 값(DB)과 표시명을 한 곳에서만 잇는다. */
@@ -75,4 +95,28 @@ export interface User {
    * "언제 탈퇴했는가"만 답한다.
    */
   deletedAt: string | null;
+}
+
+/**
+ * 어드민 사용자 목록 한 줄 (`/admin/users` · `/admin/admins`).
+ *
+ * **User 를 그대로 싣지 않는 것이 이 타입의 핵심이다.** 목록이 그리는 것은
+ * 아이디·이름·역할·상태·가입일 다섯 칸뿐인데 User 를 내보내면 전화번호·생년월일·
+ * 성별까지 전 사용자분이 한 응답에 실려 나간다. 화면에 안 그린다고 안 나가는 것이
+ * 아니다 — 계약에 실리면 브라우저까지 간다.
+ *
+ * PageSummary / AdminPageSummary 를 나눈 것과 같은 결이며, 나중에 Java 백엔드가
+ * 같은 JSON 을 돌려주려면 그쪽에도 이 좁은 DTO 가 있어야 한다.
+ *
+ * name 이 null 인 것은 탈퇴(WITHDRAWN) 계정뿐이다. 대체 문구는 도메인이 아니라
+ * 화면이 정한다 (ArticleHeader.UNKNOWN_AUTHOR 와 같은 규칙).
+ */
+export interface AdminUserSummary {
+  id: string;
+  loginId: string;
+  name: string | null;
+  role: Role;
+  status: UserStatus;
+  /** 가입일. ISO 8601 문자열. */
+  createdAt: string;
 }

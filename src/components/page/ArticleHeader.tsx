@@ -1,6 +1,7 @@
 import CategoryBadge from "@/components/common/CategoryBadge";
 import CommentBubble from "@/components/common/CommentBubble";
 import Tag from "@/components/common/Tag";
+import { formatDate } from "@/lib/format/date";
 import type { Category, PageDetail } from "@/lib/types";
 
 type ArticleHeaderProps = {
@@ -17,24 +18,6 @@ type ArticleHeaderProps = {
  * 남고 작성자 정보만 사라진다는 것이 이용 안내(/policy 2절)의 약속이다.
  */
 const UNKNOWN_AUTHOR = "(탈퇴한 사용자)";
-
-/**
- * `2026.08.06` 형태.
- *
- * timeZone 을 못박는다. 서버와 브라우저의 기본 시간대가 다르면 같은 값이
- * 서로 다른 날짜로 그려져 hydration 이 어긋난다.
- */
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(new Date(iso))
-    .replace(/\.$/, "")
-    .replace(/\s/g, "");
-}
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (

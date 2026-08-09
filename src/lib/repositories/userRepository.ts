@@ -10,7 +10,13 @@
 // =============================================================
 
 import { ConflictError } from "@/lib/errors";
-import type { Gender, Role, User, UserStatus } from "@/lib/types";
+import type {
+  AdminUserSummary,
+  Gender,
+  Role,
+  User,
+  UserStatus,
+} from "@/lib/types";
 import { LOGIN_ID_TAKEN } from "@/lib/validation/user";
 
 import { getSupabase } from "./supabaseClient";
@@ -20,6 +26,15 @@ const TABLE = "users";
 /** 도메인 모델로 옮길 때 읽는 컬럼. password_hash 는 의도적으로 빠져 있다. */
 const USER_COLUMNS =
   "id, login_id, name, gender, birth_date, phone, is_church_member, role, status, created_at, updated_at, deleted_at";
+
+/**
+ * 어드민 목록이 읽는 컬럼. USER_COLUMNS 의 부분집합이다.
+ *
+ * 전화번호·생년월일·성별이 빠져 있는 것이 요점이다 — 목록은 다섯 칸만 그리는데
+ * 전 컬럼을 읽으면 화면에 안 쓰는 PII 가 응답까지 따라 나간다
+ * (AdminUserSummary 주석). 어차피 select 로 안 읽으면 실을 방법도 없다.
+ */
+const ADMIN_SUMMARY_COLUMNS = "id, login_id, name, role, status, created_at";
 
 /** Postgres unique_violation. login_id unique 제약과 부딪혔을 때 온다. */
 const PG_UNIQUE_VIOLATION = "23505";
@@ -41,6 +56,12 @@ type UserRow = {
 };
 
 type UserRowWithHash = UserRow & { password_hash: string };
+
+/** 어드민 목록 행. ADMIN_SUMMARY_COLUMNS 와 짝이다. */
+type AdminUserSummaryRow = Pick<
+  UserRow,
+  "id" | "login_id" | "name" | "role" | "status" | "created_at"
+>;
 
 /**
  * 비밀번호 해시를 달고 있는 사용자.
@@ -101,6 +122,17 @@ function toUser(row: UserRow): User {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+  };
+}
+
+function toAdminSummary(row: AdminUserSummaryRow): AdminUserSummary {
+  return {
+    id: row.id,
+    loginId: row.login_id,
+    name: row.name,
+    role: row.role as Role,
+    status: row.status as UserStatus,
+    createdAt: row.created_at,
   };
 }
 
@@ -178,6 +210,53 @@ export async function existsByLoginId(loginId: string): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+/**
+ * 어드민 사용자 목록 한 페이지 + 전체 건수 (`/admin/users` · `/admin/admins`).
+ *
+ * **탈퇴 계정을 기본으로 거르지 않는다.** 게시물의 `deleted_at` 과 달리 탈퇴는
+ * 상태 축(status)에 있고, "탈퇴한 사람이 있었다"는 사실 자체가 이 화면이 답해야
+ * 할 질문 중 하나다. 보고 싶지 않으면 status 필터로 좁히면 된다 — 거꾸로 여기서
+ * 걸러 버리면 탈퇴 회원을 볼 방법이 화면에 남지 않는다.
+ *
+ * role / status 를 optional 로 받는 것도 findForAdmin(pages)과 같은 구분이다:
+ *   undefined → 전체
+ *   값이 있으면 → 그 값만
+ * 기본값을 여기서 정하지 않는다. "이 화면의 기본 필터가 무엇이냐"는 화면의
+ * 규칙이고, 그래서 /admin/users 와 /admin/admins 가 같은 함수로 갈린다.
+ *
+ * 정렬은 가입일 내림차순이다. 관리 화면에서 먼저 봐야 할 것은 새로 들어온
+ * 계정이고, 목록에 그려지는 유일한 시각 컬럼이라 정렬 기준이 화면에 드러난다.
+ */
+export async function findUsersForAdmin({
+  role,
+  status,
+  page,
+  size,
+}: {
+  role?: Role;
+  status?: UserStatus;
+  page: number;
+  size: number;
+}): Promise<{ items: AdminUserSummary[]; total: number }> {
+  const from = (page - 1) * size;
+
+  const query = getSupabase()
+    .from(TABLE)
+    .select(ADMIN_SUMMARY_COLUMNS, { count: "exact" });
+
+  if (role) query.eq("role", role);
+  if (status) query.eq("status", status);
+
+  const { data, count, error } = await query
+    .order("created_at", { ascending: false })
+    .range(from, from + size - 1)
+    .returns<AdminUserSummaryRow[]>();
+
+  if (error) throw new Error(`사용자 목록 조회 실패: ${error.message}`);
+
+  return { items: (data ?? []).map(toAdminSummary), total: count ?? 0 };
+}
+
 // ── 생성 ──────────────────────────────────────────────────────
 export async function create(input: NewUser): Promise<User> {
   const { data, error } = await getSupabase()
@@ -235,6 +314,29 @@ export async function update(
     .single<UserRow>();
 
   if (error) throw new Error(`회원정보 수정 실패: ${error.message}`);
+  return toUser(row);
+}
+
+/**
+ * 역할만 바꾼다 (관리자의 승격·강등).
+ *
+ * **update() 에 role 을 얹지 않고 별도 함수로 둔 것이 핵심이다.** UpdateUserData
+ * 주석이 미리 못박아 둔 그 자리다 — 저쪽은 사용자가 자기 정보를 고치는 경로이고
+ * 이쪽은 관리자가 남의 권한을 바꾸는 경로다. 한 함수로 겸용하면 두 경로의 권한
+ * 차이가 타입에서 사라지고, 회원정보 수정 요청에 role 을 끼워 넣는 길이 열린다.
+ *
+ * "바꿔도 되는가"는 여기서 판단하지 않는다 (자기 자신인가 · 탈퇴 계정인가).
+ * 그건 규칙이라 service 의 몫이고, 여기는 UPDATE 한 문장만 책임진다.
+ */
+export async function updateRole(id: string, role: Role): Promise<User> {
+  const { data: row, error } = await getSupabase()
+    .from(TABLE)
+    .update({ role })
+    .eq("id", id)
+    .select(USER_COLUMNS)
+    .single<UserRow>();
+
+  if (error) throw new Error(`역할 변경 실패: ${error.message}`);
   return toUser(row);
 }
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import CategoryBadge from "@/components/common/CategoryBadge";
 import CommentBubble from "@/components/common/CommentBubble";
 import Tag from "@/components/common/Tag";
+import { formatDate } from "@/lib/format/date";
 import type { Category, PageSummary } from "@/lib/types";
 
 type PageListItemProps = {
@@ -13,24 +14,6 @@ type PageListItemProps = {
    */
   category?: Category;
 };
-
-/**
- * `2026.08.06` 형태.
- *
- * timeZone 을 못박는 이유는 ArticleHeader.formatDate 와 같다 — 서버와 브라우저의
- * 기본 시간대가 다르면 같은 값이 서로 다른 날짜로 그려져 hydration 이 어긋난다.
- */
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(new Date(iso))
-    .replace(/\.$/, "")
-    .replace(/\s/g, "");
-}
 
 /**
  * 목록의 게시물 한 줄.

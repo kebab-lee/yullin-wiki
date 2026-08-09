@@ -144,6 +144,36 @@ export interface PageDetail extends Page {
 }
 
 /**
+ * 어드민 위키 관리 목록(`/admin/pages`)의 한 줄.
+ *
+ * **PageSummary 와 나눠 두는 것이 핵심이다.** 두 목록은 답하는 질문이 다르다:
+ * 공개 목록은 "이 글이 무슨 내용인가"(excerpt · tags · commentCount)를 그리고,
+ * 어드민 목록은 "이 글이 지금 어떤 상태이고 누가 언제 건드렸는가"(status ·
+ * authorName · createdAt · updatedAt)를 그린다. 한 타입에 합치면 어느 화면도
+ * 쓰지 않는 필드가 양쪽 응답에 실리고, 특히 **status 가 공개 응답에 새어나간다** —
+ * 공개 목록은 정의상 PUBLISHED 뿐이라 그 필드가 항상 같은 값인 죽은 계약이 된다.
+ *
+ * excerpt 가 없다. 관리 목록은 본문을 읽는 화면이 아니라 고르는 화면이라
+ * plain_text 를 실어 나를 이유가 없다.
+ */
+export interface AdminPageSummary {
+  id: string;
+  title: string;
+
+  /** 표시명이 아니라 불변 식별자. 배지 문구는 categories 응답과 맞춰 화면이 만든다. */
+  categoryId: string;
+
+  status: PageStatus;
+
+  /** 작성자 표시명. 탈퇴 회원은 users.name 이 NULL 이라 null 일 수 있다. */
+  authorName: string | null;
+
+  /** ISO 8601. 작성일은 publishedAt 이 아니라 createdAt 이다 — 초안은 발행된 적이 없다. */
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * 목록·홈 카드용 요약 모델.
  *
  * 카드는 본문 JSON 전체가 아니라 잘라낸 미리보기 텍스트와 태그 이름만 필요하다.
