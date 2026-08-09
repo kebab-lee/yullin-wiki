@@ -24,5 +24,5 @@ export const ADMIN_MENU = [
   { label: "대시보드", href: "/admin", minRole: "EDITOR" },
   { label: "위키 관리", href: "/admin/pages", minRole: "EDITOR" },
   { label: "사용자 관리", href: "/admin/users", minRole: "ADMIN" },
-  { label: "관리자 관리", href: "/admin/admins", minRole: "ADMIN" },
+  // { label: "관리자 관리", href: "/admin/admins", minRole: "ADMIN" },
 ] as const satisfies readonly AdminMenuItem[];
