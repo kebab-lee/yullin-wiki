@@ -8,6 +8,7 @@
 // =============================================================
 
 import type {
+  AdminCategorySummary,
   AdminPageSummary,
   AdminUserSummary,
   Category,
@@ -34,6 +35,39 @@ export type ApiErrorBody = {
 
 /** GET /api/categories */
 export type CategoryListBody = { categories: Category[] };
+
+/**
+ * GET /api/admin/categories — 어드민 항목 관리 목록.
+ *
+ * **CategoryListBody 와 합치지 않는다.** 실리는 모델부터 다르고
+ * (AdminCategorySummary 는 문서 수를 달고 있다), 한 타입으로 묶으면 공개 목록
+ * 응답에도 그 칸이 생겨서 "홈과 푸터가 문서 수를 안다"는 없는 계약이 만들어진다
+ * (AdminPageListBody 를 PagedPageListBody 에서 나눈 것과 같은 근거).
+ *
+ * total 이 없다. 항목은 세 개 규모라 페이지네이션이 없고, 서버가 접을 page/size 도
+ * 없어서 되돌려줄 "적용된 값"이 아예 존재하지 않는다.
+ */
+export type AdminCategoryListBody = { categories: AdminCategorySummary[] };
+
+/**
+ * POST /api/admin/categories — 항목 추가 성공.
+ * PATCH /api/admin/categories/[id] — 항목 수정 성공.
+ *
+ * 만들거나 고친 항목을 통째로 돌려주지 않는다. 화면이 성공 후에 하는 일은
+ * 팝업을 닫고 목록을 다시 그리는 것(router.refresh)뿐이고, 목록의 정본은
+ * 서버다 — 응답으로 받은 한 줄을 클라이언트가 끼워 넣으면 정렬 순서를 바꾼
+ * 경우 그 줄만 제자리에 남는다.
+ *
+ * 두 응답의 모양이 같지만 별칭으로 합치지 않는다. 우연히 같을 뿐이고 한쪽이
+ * 필드를 늘릴 때 다른 쪽 계약이 끌려가면 안 된다 (PageCreatedBody /
+ * PageUpdatedBody 와 같은 규칙).
+ *
+ * DELETE 는 204 라 바디 타입이 없다.
+ */
+export type CategoryCreatedBody = { id: string };
+
+/** PATCH /api/admin/categories/[id] — 수정 성공. 위 주석 참조. */
+export type CategoryUpdatedBody = { id: string };
 
 /** GET /api/pages?limit= — 최근 게시물. 페이지네이션이 없어 total 도 없다. */
 export type RecentPageListBody = { pages: PageSummary[] };

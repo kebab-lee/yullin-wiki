@@ -48,6 +48,23 @@ export const pattern =
   (value) =>
     regex.test(value) ? VALID : invalid(message);
 
+/**
+ * 정수로 읽히는 문자열이 범위 안인가.
+ *
+ * 폼의 값은 언제나 문자열이라 Rule 의 입력도 문자열이다. 숫자로 바꾸는 일까지
+ * 여기서 끝내야 호출부가 "검증 전에 Number() 를 부르는" 순서에 의존하지 않는다.
+ * 형식(숫자로 생겼는가)은 pattern 이 먼저 걸러 주는 것을 전제로 한다 —
+ * 이 규칙은 범위만 답한다.
+ */
+export const intInRange =
+  (min: number, max: number, message: string): Rule =>
+  (value) => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= min && parsed <= max
+      ? VALID
+      : invalid(message);
+  };
+
 /** 선택지(성별·소속처럼 DB CHECK 로도 걸리는 값)를 검사한다. */
 export const oneOf =
   (allowed: readonly string[], message: string): Rule =>

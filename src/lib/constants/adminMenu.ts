@@ -24,5 +24,10 @@ export const ADMIN_MENU = [
   { label: "대시보드", href: "/admin", minRole: "EDITOR" },
   { label: "위키 관리", href: "/admin/pages", minRole: "EDITOR" },
   { label: "사용자 관리", href: "/admin/users", minRole: "ADMIN" },
+  // 카테고리는 문서가 아니라 **사이트의 구조**다. 항목 하나가 홈의 원형 버튼과
+  // 푸터 목록, `/categories/[slug]` 라는 주소 체계를 함께 움직이므로 글을 쓰는
+  // 권한(EDITOR)과 층위가 다르다. 화면 가드(requireRole)와 service 의 assertRole
+  // 도 같은 ADMIN 이며, 여기 minRole 은 그 둘의 표시용 그림자일 뿐이다.
+  { label: "카테고리 관리", href: "/admin/categories", minRole: "ADMIN" },
   // { label: "관리자 관리", href: "/admin/admins", minRole: "ADMIN" },
 ] as const satisfies readonly AdminMenuItem[];

@@ -16,7 +16,7 @@ export {
   isRole,
   isUserStatus,
 } from "./user";
-export type { Category } from "./category";
+export type { AdminCategorySummary, Category } from "./category";
 export type {
   AdminPageSummary,
   CreatePageData,
