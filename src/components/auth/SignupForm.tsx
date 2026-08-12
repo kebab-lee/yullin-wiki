@@ -10,6 +10,8 @@ import SelectField from "@/components/common/SelectField";
 import TextField from "@/components/common/TextField";
 import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
 import type { ApiErrorBody } from "@/lib/api/types";
+import { formatBirthDate } from "@/lib/format/birthDate";
+import { formatPhone } from "@/lib/format/phone";
 import { GENDERS, GENDER_LABEL } from "@/lib/types";
 import {
   CHURCH_MEMBER_LABEL,
@@ -307,6 +309,7 @@ export default function SignupForm() {
             autoComplete="bday"
             inputMode="numeric"
             maxLength={10}
+            format={formatBirthDate}
             size="sm"
             labelPlacement="external"
             error={errors.birthDate}
@@ -324,6 +327,7 @@ export default function SignupForm() {
             autoComplete="tel"
             inputMode="tel"
             maxLength={13}
+            format={formatPhone}
             size="sm"
             labelPlacement="external"
             error={errors.phone}

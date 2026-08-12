@@ -11,6 +11,8 @@ import TextField from "@/components/common/TextField";
 import PasswordChangeDialog from "@/components/user/PasswordChangeDialog";
 import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
 import type { ApiErrorBody } from "@/lib/api/types";
+import { formatBirthDate } from "@/lib/format/birthDate";
+import { formatPhone } from "@/lib/format/phone";
 import type { User } from "@/lib/types";
 import { GENDERS, GENDER_LABEL } from "@/lib/types";
 import {
@@ -201,6 +203,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
             autoComplete="bday"
             inputMode="numeric"
             maxLength={10}
+            format={formatBirthDate}
             size="sm"
             labelPlacement="external"
             error={errors.birthDate}
@@ -218,6 +221,7 @@ export default function ProfileEditForm({ user }: { user: User }) {
             autoComplete="tel"
             inputMode="tel"
             maxLength={13}
+            format={formatPhone}
             size="sm"
             labelPlacement="external"
             error={errors.phone}

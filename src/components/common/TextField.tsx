@@ -1,3 +1,5 @@
+import { applyMask, deleteDigit } from "@/lib/format/mask";
+
 import FieldMessage from "./FieldMessage";
 
 /**
@@ -43,6 +45,19 @@ type TextFieldProps = {
   labelPlacement?: "hidden" | "external";
   /** 인풋 아래에 붙는 인라인 에러 문구. 없으면 렌더하지 않는다. */
   error?: string;
+  /**
+   * 입력 중인 값을 다듬는 순수 함수 (`src/lib/format/`).
+   *
+   * 넘기면 이 필드는 마스킹 입력이 된다 — 치는 동안 구분자가 자동으로 붙고,
+   * 구분자 위에서 지우기를 누르면 그 너머의 숫자가 지워지고, 커서는 제자리에
+   * 남는다. 규칙 자체는 여기 두지 않는다. 전화번호인지 생년월일인지는 format
+   * 모듈이 알고, 이 컴포넌트는 "언제 불러서 커서를 어떻게 지킬 것인가"만 안다
+   * (검증을 validation 모듈에 맡기는 것과 같은 결).
+   *
+   * **부모가 받는 값이 곧 포맷된 값이다.** 화면만 꾸미는 것이 아니라 폼
+   * state 가 포맷된 문자열을 들고 있게 되며, 그 값이 그대로 서버로 간다.
+   */
+  format?: (value: string) => string;
 };
 
 /**
@@ -68,8 +83,69 @@ export default function TextField({
   size = "md",
   labelPlacement = "hidden",
   error,
+  format,
 }: TextFieldProps) {
   const errorId = error ? `${name}-error` : undefined;
+
+  /**
+   * 값과 커서를 **DOM 에 직접** 써 넣고 나서 부모에게 알린다.
+   *
+   * effect 로 미루지 않는 것이 핵심이다. controlled input 은 부모가 넘긴 값으로
+   * 다시 그려지는데, 그때 DOM 의 값이 이미 같으면 React 는 인풋을 건드리지
+   * 않는다 — 그래서 여기서 맞춰 둔 커서가 그대로 남는다. 반대로 state 만 바꾸고
+   * 놔두면 인풋이 새로 그려지며 커서가 맨 뒤로 튄다.
+   */
+  const commit = (
+    input: HTMLInputElement,
+    next: { value: string; caret: number },
+  ) => {
+    input.value = next.value;
+    input.setSelectionRange(next.caret, next.caret);
+    onChange(next.value);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    if (!format) {
+      onChange(input.value);
+      return;
+    }
+    // 붙여넣기도 이 경로로 들어온다. format 이 숫자만 남기고 다시 끊으므로
+    // "010-0000-0000" 을 붙여넣든 "01000000000" 을 붙여넣든 결과가 같다.
+    const caret = input.selectionStart ?? input.value.length;
+    commit(input, applyMask(input.value, caret, format));
+  };
+
+  /**
+   * 구분자 위에서의 지우기.
+   *
+   * 그냥 두면 브라우저가 하이픈을 지우고 → 곧바로 재포맷되어 하이픈이 되살아나
+   * 화면상 아무 일도 일어나지 않는다. 그래서 하이픈 대신 그 너머의 숫자를
+   * 지운다. 숫자 위에서 눌렀거나 범위를 선택했을 때는 손대지 않는다.
+   */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!format) return;
+    if (e.key !== "Backspace" && e.key !== "Delete") return;
+
+    const input = e.currentTarget;
+    const start = input.selectionStart;
+    if (start === null || start !== input.selectionEnd) return;
+
+    const backward = e.key === "Backspace";
+    const boundary = input.value[backward ? start - 1 : start];
+    if (boundary === undefined || /\d/.test(boundary)) return;
+
+    const next = deleteDigit(
+      input.value,
+      start,
+      backward ? "backward" : "forward",
+      format,
+    );
+    if (!next) return;
+
+    e.preventDefault();
+    commit(input, next);
+  };
 
   return (
     <div className="flex w-full flex-col">
@@ -83,7 +159,8 @@ export default function TextField({
         name={name}
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder ?? label}
         autoComplete={autoComplete}
         inputMode={inputMode}
