@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import CommentForm from "@/components/comment/CommentForm";
+import ReportCommentDialog from "@/components/comment/ReportCommentDialog";
 import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
 import { formatDate } from "@/lib/format/date";
 import type { CommentView } from "@/lib/types";
@@ -17,6 +18,9 @@ const ANONYMOUS_LABEL = "익명";
 
 /** 탈퇴 회원. ArticleHeader 와 같은 문구를 쓴다 — 같은 사실을 가리킨다. */
 const UNKNOWN_AUTHOR = "(탈퇴한 사용자)";
+
+/** 신고 접수 완료 (Figma 1:1255). 팝업을 닫은 자리에 잠깐 남는다. */
+const REPORTED_MESSAGE = "신고가 접수되었습니다 ✅";
 
 type CommentItemProps = {
   pageId: string;
@@ -85,11 +89,34 @@ export default function CommentItem({
   const [replying, setReplying] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reported, setReported] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // **표시용 판정이다.** 실제 차단은 commentService.deleteComment 가 한다 —
   // API 는 이 화면을 거치지 않고 직접 호출된다 (CLAUDE.md "권한").
   const canDelete = comment.isMine || canModerate;
+
+  // ── 신고 버튼을 그리는 조건 ─────────────────────────────────
+  // **비로그인에게는 아예 노출하지 않는다.** 댓글 폼과 다른 판단이다 — 저쪽은
+  // 폼을 보여주고 로그인을 안내하는데(다 쓴 글이 사라지지 않게), 신고는 눌러야
+  // 무엇을 하는 버튼인지 알 수 있는 조작이라 로그인 유도로 이어지면 아무 맥락
+  // 없이 로그인 화면을 만나게 된다.
+  //
+  // 자기 댓글에도 그리지 않는다. 자기 발언에 대한 조치는 신고가 아니라 삭제이고
+  // 그 버튼이 바로 옆에 있다 — 실제 차단은 reportService 가 한다(403).
+  //
+  // 이미 지워진 댓글에는 애초에 이 컴포넌트가 그려지지 않는다(목록이 VISIBLE 만
+  // 내려온다).
+  const canReport = isLoggedIn && !comment.isMine;
+
+  // ── 신고 사실은 신고자만 안다 ───────────────────────────────
+  // 접수 후에도 목록을 다시 그리지 않고(router.refresh 없음) 이 컴포넌트의
+  // 상태 하나만 바뀐다. 서버 응답에도 신고 여부가 실리지 않으므로(204),
+  // **새로고침하면 이 표시는 사라지고 버튼이 돌아온다.** 그건 버그가 아니라
+  // 의도다 — "이미 신고함"을 화면에 남기려면 신고 여부를 댓글 목록 응답에
+  // 실어야 하는데, 그 계약이 생기는 순간 남의 신고 여부를 묻는 경로도 함께
+  // 열린다. 중복 신고는 DB 의 unique 제약이 막고 409 로 답한다.
 
   const handleDelete = async () => {
     if (deleting) return;
@@ -184,7 +211,35 @@ export default function CommentItem({
                   삭제
                 </button>
               ))}
+
+            {canReport &&
+              (reported ? (
+                <span className="text-gray4">{REPORTED_MESSAGE}</span>
+              ) : (
+                /* 삭제와 달리 제자리 확인이 아니라 팝업이다. 고를 사유가 6개라
+                   한 줄에 들어가지 않고, 무엇을 신고하는지 본문과 함께 다시
+                   보여줘야 한다 (Figma 1:1236). */
+                <button
+                  type="button"
+                  onClick={() => setReporting(true)}
+                  className="min-h-11 transition-colors hover:text-brand-red lg:min-h-0"
+                >
+                  신고
+                </button>
+              ))}
           </div>
+
+          {reporting && (
+            <ReportCommentDialog
+              commentId={comment.id}
+              content={comment.content}
+              onClose={() => setReporting(false)}
+              onReported={() => {
+                setReporting(false);
+                setReported(true);
+              }}
+            />
+          )}
 
           {error ? (
             <p role="alert" className="mt-[4px] text-[13px] text-brand-red">

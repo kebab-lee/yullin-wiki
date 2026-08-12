@@ -17,6 +17,7 @@ import type {
   User,
   UserStatus,
 } from "@/lib/types";
+import type { BlockableStatus } from "@/lib/validation/report";
 import { LOGIN_ID_TAKEN } from "@/lib/validation/user";
 
 import { getSupabase } from "./supabaseClient";
@@ -337,6 +338,38 @@ export async function updateRole(id: string, role: Role): Promise<User> {
     .single<UserRow>();
 
   if (error) throw new Error(`역할 변경 실패: ${error.message}`);
+  return toUser(row);
+}
+
+/**
+ * 계정 상태만 바꾼다 (관리자의 차단 · 차단 해제).
+ *
+ * **updateRole 과 같은 이유로 별도 함수다.** UpdateUserData 에 status 를 얹으면
+ * 회원정보 수정 요청에 status 를 끼워 넣어 스스로 차단을 푸는 길이 열린다.
+ *
+ * **withdraw 와도 나눠 둔다.** 저쪽은 status 와 함께 deleted_at·PII 를 한 문장에
+ * 쓰는 종점 처리이고, 이쪽은 오갈 수 있는 상태 하나만 바꾼다. 한 함수로 겸용하면
+ * 차단이 PII 를 지우거나, 탈퇴가 되돌릴 수 있는 것처럼 보이게 된다.
+ *
+ * 받는 타입이 BlockableStatus 라 **WITHDRAWN 을 넘길 수 없다.** 관리자가 남을
+ * 탈퇴시키는 경로는 화면에도 정책에도 없고, 타입이 그 사실을 강제한다.
+ *
+ * "바꿔도 되는가"는 여기서 판단하지 않는다 (자기 자신인가 · ADMIN 인가 ·
+ * 탈퇴 계정인가). 그건 규칙이라 service 의 몫이고, 여기는 UPDATE 한 문장만
+ * 책임진다 (updateRole 과 같은 경계).
+ */
+export async function updateStatus(
+  id: string,
+  status: BlockableStatus,
+): Promise<User> {
+  const { data: row, error } = await getSupabase()
+    .from(TABLE)
+    .update({ status })
+    .eq("id", id)
+    .select(USER_COLUMNS)
+    .single<UserRow>();
+
+  if (error) throw new Error(`계정 상태 변경 실패: ${error.message}`);
   return toUser(row);
 }
 

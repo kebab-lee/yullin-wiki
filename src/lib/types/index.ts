@@ -29,6 +29,8 @@ export type {
 } from "./page";
 export type { CreatePageRevisionData } from "./pageRevision";
 export type {
+  AdminCommentSummary,
+  AdminReportSummary,
   Comment,
   CommentPreview,
   CommentReportReason,
@@ -37,6 +39,8 @@ export type {
   CommentView,
   CommentWithAuthor,
   CreateCommentData,
+  CreateCommentReportData,
+  DashboardComment,
   MyCommentSummary,
   ReportPreview,
 } from "./comment";

@@ -14,12 +14,21 @@
 // HTTP 를 모른다. 실패는 도메인 에러로 던지고 Route Handler 가 옮긴다.
 // =============================================================
 
-import { assertAuthenticated } from "@/lib/auth/guards";
+import { canWriteComment } from "@/lib/auth/accountStatus";
+import { assertAuthenticated, assertRole } from "@/lib/auth/guards";
 import { hasRole } from "@/lib/auth/roles";
 import type { SessionPayload } from "@/lib/auth/session";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import * as commentRepository from "@/lib/repositories/commentRepository";
-import type { CommentView, CommentWithAuthor, MyCommentSummary } from "@/lib/types";
+import * as userRepository from "@/lib/repositories/userRepository";
+import type {
+  AdminCommentSummary,
+  CommentPreview,
+  CommentView,
+  CommentWithAuthor,
+  DashboardComment,
+  MyCommentSummary,
+} from "@/lib/types";
 import {
   COMMENT_DELETE_FORBIDDEN,
   COMMENT_NOT_FOUND,
@@ -27,6 +36,7 @@ import {
   PARENT_TOO_DEEP,
   parseCommentForm,
 } from "@/lib/validation/comment";
+import { COMMENT_BLOCKED_AUTHOR } from "@/lib/validation/report";
 
 import { assertPageIsPublic } from "./pageService";
 
@@ -106,6 +116,24 @@ export async function listComments(
 }
 
 /**
+ * 이 사용자가 댓글을 쓸 수 있는 상태인가. 아니면 ForbiddenError.
+ *
+ * 계정이 사라진 경우(조회 실패)도 함께 막는다 — 세션은 남아 있는데 행이 없는
+ * 상태이고, 그때 통과시키면 FK 위반으로 insert 가 터진다.
+ *
+ * **판정 규칙 자체는 여기 없다.** auth/accountStatus 의 canWriteComment 가
+ * 갖는다 — "차단이 무엇을 막는가"는 계정 상태의 규칙이라 로그인 판정
+ * (canSignIn)과 나란히 있어야 읽힌다.
+ */
+async function assertCanWriteComment(userId: string): Promise<void> {
+  const user = await userRepository.findById(userId);
+
+  if (!user || !canWriteComment(user.status)) {
+    throw new ForbiddenError(COMMENT_BLOCKED_AUTHOR);
+  }
+}
+
+/**
  * 답글을 달 수 있는 대상인가.
  *
  * 세 가지를 본다. 셋 다 DB 를 봐야 아는 질문이라 validation 모듈이 아니라
@@ -148,6 +176,23 @@ async function assertRepliable(parentId: string, pageId: string): Promise<void> 
  * **authorId 는 세션에서 온다.** 요청 바디에 authorId 가 있어도 읽지 않는다
  * (parseCommentForm 이 애초에 그 칸을 만들지 않는다) — 받으면 남의 이름으로
  * 댓글을 쓸 수 있다. pageService.createPage 와 같은 규칙이다.
+ *
+ * ── ①.5 차단 확인이 이 함수의 새 관문이다 ───────────────────
+ * **users.status = 'BLOCKED' 이 실제 효과를 갖는 유일한 자리다.** 로그인도
+ * 조회도 막지 않고 여기만 막는다 — 시안(1:2516)이 약속한 "댓글 기능이
+ * 제한됩니다"가 문자 그대로 구현된 지점이며, 근거는 auth/accountStatus.ts 에
+ * 있다. 차단 규칙을 늘리고 싶어지면 그 파일에 함수를 더하고 여기는 부르기만
+ * 한다.
+ *
+ * **세션의 값을 믿지 않고 DB 를 읽는다.** 토큰은 7일 살아 있어서 발급 뒤에
+ * 차단된 사용자가 status 없는 payload 로 계속 댓글을 쓸 수 있다 —
+ * authService.getCurrentUser 가 role 을 DB 에서 다시 읽는 것과 같은 이유다.
+ * 그래서 조회가 한 번 더 붙는데, 댓글 작성은 목록 조회와 달리 요청이 드물고
+ * 되돌릴 수 없는 쓰기라 그 비용을 치를 자리가 맞다.
+ *
+ * 거절은 ForbiddenError 다 — 누구인지는 알지만 허용되지 않는 조작이고,
+ * 401 로 답하면 화면이 로그인 페이지로 보내서 이미 로그인한 사용자가
+ * 무한히 되돌아온다.
  */
 export async function createComment(
   session: SessionPayload | null,
@@ -155,6 +200,8 @@ export async function createComment(
   input: unknown,
 ): Promise<CommentView> {
   assertAuthenticated(session);
+
+  await assertCanWriteComment(session.userId);
 
   await assertPageIsPublic(pageId);
 
@@ -244,4 +291,103 @@ export async function listMyComments(
     session.userId,
     MY_COMMENT_LIMIT,
   );
+}
+
+// ── 관리자용 ──────────────────────────────────────────────────
+// 여기부터는 위와 달리 **모든 댓글**을 다룬다. 그래서 구역을 갈라 두고, 모든
+// 함수가 assertRole 로 시작한다 (userService 의 관리자 구역과 같은 규칙).
+
+/** 어드민 댓글 목록 한 페이지의 기본 건수. 다른 관리 목록과 같은 20 이다. */
+const DEFAULT_ADMIN_COMMENT_PAGE_SIZE = 20;
+
+/** 한 번에 실어 나를 수 있는 최대 건수. 임의로 큰 size 를 막는다. */
+const MAX_ADMIN_COMMENT_PAGE_SIZE = 50;
+
+/** 대시보드 "최근 달린 댓글" 카드 수. Figma 1:2184 기준 3장. */
+const DASHBOARD_COMMENT_LIMIT = 3;
+
+function positiveInt(value: number | undefined, fallback: number): number {
+  if (value === undefined || !Number.isFinite(value)) return fallback;
+  return Math.max(Math.trunc(value), 1);
+}
+
+/**
+ * 어드민 최근 댓글 목록 (`/admin/comments`).
+ *
+ * **assertRole 이 첫 줄이다.** 파라미터를 다듬는 것조차 그 뒤다 — 권한 없는
+ * 요청에 응답 모양이 조금이라도 새어나가면 안 된다.
+ *
+ * **기준이 EDITOR 다.** 사용자 관리(ADMIN)와 선이 다르다 — 이 화면이 할 수
+ * 있는 일은 댓글을 읽고 지우는 것뿐이고 계정을 건드리지 않는다. 위키를 운영
+ * 하는 사람이 자기 문서에 달린 부적절한 댓글을 내리지 못하면 운영이 성립하지
+ * 않는다.
+ *
+ * ⚠️ **그런데 삭제는 여전히 ADMIN 만 할 수 있다** (deleteComment 의 기준).
+ * EDITOR 는 이 목록을 보고 해당 글로 이동할 수 있지만 삭제 버튼은 눌러도
+ * 403 이다. 두 기준이 다른 것은 의도이며 — 읽는 것과 남의 발언을 내리는 것은
+ * 다른 권한이다 — 화면은 role 로 버튼을 감춰서 그 차이를 미리 보여준다.
+ *
+ * 목록은 **지워진 댓글도 싣는다** (findForAdmin). 근거는 repository 주석에 있다.
+ */
+export async function listCommentsForAdmin(
+  session: SessionPayload | null,
+  params: { page?: number; size?: number } = {},
+): Promise<{
+  items: AdminCommentSummary[];
+  total: number;
+  page: number;
+  size: number;
+}> {
+  assertRole(session, "EDITOR");
+
+  const window = {
+    page: positiveInt(params.page, 1),
+    size: Math.min(
+      positiveInt(params.size, DEFAULT_ADMIN_COMMENT_PAGE_SIZE),
+      MAX_ADMIN_COMMENT_PAGE_SIZE,
+    ),
+  };
+
+  const { items, total } = await commentRepository.findForAdmin(window);
+
+  return { items, total, ...window };
+}
+
+/**
+ * 대시보드 "최근 달린 댓글" 카드 (Figma 1:2184).
+ *
+ * ── 여기서 익명을 가린다 ────────────────────────────────────
+ * 관리 목록(listCommentsForAdmin)이 실명을 그대로 싣는 것과 **반대**다.
+ * 근거는 화면이 할 수 있는 일에 있다 — 신고 관리와 댓글 관리는 작성자를 상대로
+ * 조치(차단·삭제)를 하는 화면이라 누구인지 알아야 하지만, 대시보드 카드는
+ * 조작이 없는 미리보기다. 볼 이유가 없는 자리에서는 안 보이는 편이 맞다.
+ *
+ * 가리는 방식은 공개 목록(toView)과 **같다** — 표시 문구를 만들지 않고
+ * authorName 을 null 로 접는다. "익명" / "(탈퇴한 사용자)" 를 고르는 것은
+ * 화면의 몫이고, service 가 문자열을 만들면 같은 문구가 컴포넌트와 두 벌이 된다.
+ */
+export async function listRecentCommentsForDashboard(
+  session: SessionPayload | null,
+): Promise<CommentPreview[]> {
+  assertRole(session, "EDITOR");
+
+  const comments = await commentRepository.findRecentForDashboard(
+    DASHBOARD_COMMENT_LIMIT,
+  );
+
+  return comments.map(toPreview);
+}
+
+/** 대시보드 카드 한 장. 익명이면 이름을 지운다 (toView 와 같은 규칙). */
+function toPreview(comment: DashboardComment): CommentPreview {
+  return {
+    id: comment.id,
+    authorName: comment.isAnonymous ? null : comment.authorName,
+    isAnonymous: comment.isAnonymous,
+    createdAt: comment.createdAt,
+    content: comment.content,
+    pageId: comment.pageId,
+    pageTitle: comment.pageTitle,
+    commentCount: comment.commentCount,
+  };
 }

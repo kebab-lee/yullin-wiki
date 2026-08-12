@@ -11,6 +11,7 @@
 // 클라이언트도 같은 검증 함수를 쓰지만 그건 편의고, 진짜 방어선은 여기다.
 // =============================================================
 
+import { canSignIn } from "@/lib/auth/accountStatus";
 import { assertAuthenticated } from "@/lib/auth/guards";
 import {
   ABSENT_USER_HASH,
@@ -87,8 +88,12 @@ export async function login(
     found?.passwordHash ?? ABSENT_USER_HASH,
   );
 
-  // ACTIVE 가 아닌 계정(BLOCKED / WITHDRAWN)은 비밀번호가 맞아도 못 들어온다.
-  if (!found || found.status !== "ACTIVE" || !matched) {
+  // 탈퇴 계정은 비밀번호가 맞아도 못 들어온다.
+  //
+  // **BLOCKED 는 여기서 막지 않는다 (기존 동작 변경).** 차단은 계정 잠금이
+  // 아니라 댓글 제한이며, 그 판정은 commentService.createComment 가 한다 —
+  // 근거는 auth/accountStatus.ts 의 canSignIn 주석에 있다.
+  if (!found || !canSignIn(found.status) || !matched) {
     throw new UnauthorizedError(LOGIN_FAILED);
   }
 
@@ -100,14 +105,19 @@ export async function login(
  * 현재 로그인한 사용자.
  *
  * 토큰의 role 을 그대로 믿지 않고 DB 를 다시 읽는다 — 토큰은 7일 살아 있어서,
- * 그 사이 차단되거나 탈퇴한 계정이 발급 시점의 권한으로 계속 통과하면 안 된다.
+ * 그 사이 강등되거나 탈퇴한 계정이 발급 시점의 권한으로 계속 통과하면 안 된다.
+ *
+ * **차단(BLOCKED)은 여기서 튕기지 않는다.** 차단된 사용자도 로그인 상태를
+ * 유지한다 — 근거는 auth/accountStatus.ts 의 canSignIn 주석. 그래서 이 함수가
+ * 돌려주는 User 에는 status 가 그대로 실려 있고, 헤더·마이페이지가 필요하면
+ * 그 값으로 안내를 그린다.
  */
 export async function getCurrentUser(): Promise<User> {
   const session = await getSession();
   assertAuthenticated(session);
 
   const user = await userRepository.findById(session.userId);
-  if (!user || user.status !== "ACTIVE") throw new UnauthorizedError();
+  if (!user || !canSignIn(user.status)) throw new UnauthorizedError();
 
   return user;
 }

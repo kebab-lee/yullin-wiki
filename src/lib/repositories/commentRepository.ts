@@ -11,9 +11,11 @@
 // =============================================================
 
 import type {
+  AdminCommentSummary,
   CommentStatus,
   CommentWithAuthor,
   CreateCommentData,
+  DashboardComment,
   MyCommentSummary,
 } from "@/lib/types";
 
@@ -39,6 +41,33 @@ const COMMENT_COLUMNS =
  * 매 요청 따라붙는다 (pageRepository 가 목록/관리 목록을 나눈 것과 같은 근거).
  */
 const MY_COMMENT_COLUMNS = "id, page_id, content, created_at, page:pages(title)";
+
+/**
+ * 어드민 최근 댓글 목록이 읽는 컬럼 (`/admin/comments`).
+ *
+ * **COMMENT_COLUMNS 도 MY_COMMENT_COLUMNS 도 재사용하지 않는다.** 이 목록은
+ * 위 둘이 각각 반쪽씩 가진 것을 다 필요로 한다 — 작성자 조인(누가 썼는가)과
+ * 게시물 제목 조인(어느 글에 달렸는가)이 동시에 있어야 관리자가 "이 댓글을
+ * 지울 것인가"를 판단할 수 있다. 한쪽을 늘려서 겸용하면 그 조인이 상세 화면의
+ * 댓글 목록이나 마이페이지에도 매 요청 따라붙는다.
+ */
+const ADMIN_COMMENT_COLUMNS =
+  "id, page_id, author_id, content, is_anonymous, status, created_at, author:users(name), page:pages(title)";
+
+/**
+ * 대시보드 카드가 읽는 컬럼 (Figma 1:2184).
+ *
+ * `page:pages(title, comments(count))` 로 **게시물의 댓글 수까지 같은 왕복에**
+ * 받는다. 카드마다 countByPageId 를 부르면 3장에 요청이 4번이 되고, 그건
+ * 대시보드가 카드를 몇 장 그리느냐에 따라 늘어나는 비용이다.
+ *
+ * 그 count 에는 필터를 걸 수 없어서 **지워진 댓글까지 세어진다.** 상세 화면의
+ * 배지(pageRepository 의 comments(count) + VISIBLE 필터)와 어긋나는 지점이지만,
+ * 대시보드 카드의 숫자는 조작에 쓰이지 않는 참고 표시이고 정확한 수는 그 글로
+ * 들어가면 보인다. 여기서 맞추려면 게시물별 조회를 한 번 더 돌아야 한다.
+ */
+const DASHBOARD_COMMENT_COLUMNS =
+  "id, page_id, content, is_anonymous, created_at, author:users(name), page:pages(title, comments(count))";
 
 /** pageRepository 와 같은 이유로 여기서도 끝낸다 — uuid 아닌 문자열 비교. */
 const PG_INVALID_TEXT_REPRESENTATION = "22P02";
@@ -73,6 +102,32 @@ type MyCommentRow = {
   page: { title: string } | null;
 };
 
+type AdminCommentRow = {
+  id: string;
+  page_id: string;
+  author_id: string;
+  content: string;
+  is_anonymous: boolean;
+  status: string;
+  created_at: string;
+  author: { name: string | null } | null;
+  page: { title: string } | null;
+};
+
+/**
+ * 대시보드 행. `comments(count)` 는 pageRepository 와 같은 모양으로 온다 —
+ * 집계 한 줄이 배열에 담겨 있다(`[{ count: 3 }]`).
+ */
+type DashboardCommentRow = {
+  id: string;
+  page_id: string;
+  content: string;
+  is_anonymous: boolean;
+  created_at: string;
+  author: { name: string | null } | null;
+  page: { title: string; comments: { count: number }[] | null } | null;
+};
+
 // ── 변환 ──────────────────────────────────────────────────────
 function toComment(row: CommentRow): CommentWithAuthor {
   return {
@@ -98,6 +153,36 @@ function toMyComment(row: MyCommentRow): MyCommentSummary {
     pageTitle: row.page?.title ?? null,
     content: row.content,
     createdAt: row.created_at,
+  };
+}
+
+function toAdminComment(row: AdminCommentRow): AdminCommentSummary {
+  return {
+    id: row.id,
+    content: row.content,
+    createdAt: row.created_at,
+    status: row.status as CommentStatus,
+    authorId: row.author_id,
+    // 익명이어도 실제 이름을 그대로 올린다 — 가리는 판단은 service 의 몫이고,
+    // 어드민 화면은 이 값을 봐야 한다 (파일 맨 위 주석).
+    authorName: row.author?.name ?? null,
+    isAnonymous: row.is_anonymous,
+    pageId: row.page_id,
+    pageTitle: row.page?.title ?? null,
+  };
+}
+
+function toDashboardComment(row: DashboardCommentRow): DashboardComment {
+  return {
+    id: row.id,
+    content: row.content,
+    createdAt: row.created_at,
+    authorName: row.author?.name ?? null,
+    isAnonymous: row.is_anonymous,
+    pageId: row.page_id,
+    pageTitle: row.page?.title ?? null,
+    // 집계는 배열 한 줄로 온다. 게시물이 지워졌으면 조인 자체가 비어 0 이 된다.
+    commentCount: row.page?.comments?.[0]?.count ?? 0,
   };
 }
 
@@ -209,6 +294,69 @@ export async function findById(id: string): Promise<CommentWithAuthor | null> {
   }
 
   return data ? toComment(data) : null;
+}
+
+/**
+ * 어드민 최근 댓글 목록 한 페이지 + 전체 건수 (`/admin/comments`).
+ *
+ * **지워진 댓글을 거르지 않는다.** 공개 목록(findByPageId)이 VISIBLE 만 싣는
+ * 것과 반대다 — 관리 화면에서 삭제분이 통째로 사라지면 "이 댓글이 지워졌는가,
+ * 애초에 없었는가"를 구분할 방법이 없고, 신고 관리에서 넘어와 대조할 수도 없다.
+ * status 는 도메인 모델에 실려 나가므로 화면이 배지로 가른다
+ * (findUsersForAdmin 이 탈퇴 계정을 거르지 않는 것과 같은 근거).
+ *
+ * 정렬은 작성 시각 내림차순이다 — 화면 이름이 "최근 달린 댓글"이고, 관리자가
+ * 먼저 봐야 할 것은 방금 달린 댓글이다. 공개 목록의 오름차순(대화 순서)과
+ * 반대인 것이 의도다.
+ */
+export async function findForAdmin({
+  page,
+  size,
+}: {
+  page: number;
+  size: number;
+}): Promise<{ items: AdminCommentSummary[]; total: number }> {
+  const from = (page - 1) * size;
+
+  const { data, count, error } = await getSupabase()
+    .from(TABLE)
+    .select(ADMIN_COMMENT_COLUMNS, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, from + size - 1)
+    .returns<AdminCommentRow[]>();
+
+  if (error) throw new Error(`댓글 관리 목록 조회 실패: ${error.message}`);
+
+  return { items: (data ?? []).map(toAdminComment), total: count ?? 0 };
+}
+
+/**
+ * 대시보드 카드용 최근 댓글 (Figma 1:2184).
+ *
+ * **findForAdmin 을 limit 만 바꿔 부르지 않는다.** 저쪽은 `count: "exact"` 로
+ * 전체 건수를 매번 세는데 대시보드는 카드 3장만 그리므로 그 비용이 낭비이고,
+ * 이쪽만 게시물의 댓글 수를 함께 읽는다(DASHBOARD_COMMENT_COLUMNS).
+ *
+ * 여기서는 **VISIBLE 만 싣는다.** 관리 목록과 반대인 이유는 대시보드가 조작
+ * 없는 미리보기라서다 — 지워진 댓글 카드는 눌러도 할 일이 없고, "최근 이런
+ * 댓글이 달렸습니다"라는 화면의 질문에 대한 답도 아니다.
+ * comments_recent_idx(created_at desc where status = 'VISIBLE')가 이 조회
+ * 그대로의 인덱스다.
+ */
+export async function findRecentForDashboard(
+  limit: number,
+): Promise<DashboardComment[]> {
+  const { data, error } = await getSupabase()
+    .from(TABLE)
+    .select(DASHBOARD_COMMENT_COLUMNS)
+    .eq("status", VISIBLE)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+    .returns<DashboardCommentRow[]>();
+
+  if (error) throw new Error(`최근 댓글 조회 실패: ${error.message}`);
+
+  return (data ?? []).map(toDashboardComment);
 }
 
 // ── 생성 ──────────────────────────────────────────────────────

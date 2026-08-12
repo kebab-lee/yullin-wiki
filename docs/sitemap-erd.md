@@ -65,8 +65,9 @@ Figma에 `Home`, `항목별 게시물`, `항목 - 공간`, `검색 결과`가 Us
 
 - [ ] 아이디 / 비밀번호 찾기
 - [ ] 404 / 에러 페이지
-- [ ] 카테고리 관리 (어드민이 항목을 추가·수정하는 화면 부재 — 현재는 시드 데이터로만 존재)
-- [ ] 회원 관리 목록 (차단이 신고 화면에서만 가능)
+- [x] 카테고리 관리 (`/admin/categories`)
+- [x] 회원 관리 목록 (`/admin/users`) — 차단은 신고 화면과 이 화면 **양쪽**에서 가능하며
+      같은 라우트(`PATCH /api/admin/users/[id]/status`)와 같은 규칙을 쓴다
 
 ---
 
@@ -150,13 +151,26 @@ erDiagram
 
 ### enum 값
 
-| 컬럼                     | 값                                                |
-| ------------------------ | ------------------------------------------------- |
-| `users.role`             | `USER`, `ADMIN`                                   |
-| `users.status`           | `ACTIVE`, `BLOCKED`, `WITHDRAWN`                  |
-| `pages.status`           | `DRAFT`, `PUBLISHED`                              |
-| `comments.status`        | `VISIBLE`, `DELETED`                              |
-| `comment_reports.status` | `PENDING`, `RESOLVED_DELETED`, `RESOLVED_IGNORED` |
+| 컬럼                     | 값                                                                  |
+| ------------------------ | ------------------------------------------------------------------- |
+| `users.role`             | `USER`, `EDITOR`, `ADMIN`                                           |
+| `users.status`           | `ACTIVE`, `BLOCKED`, `WITHDRAWN`                                    |
+| `pages.status`           | `DRAFT`, `PUBLISHED`, `HIDDEN`                                      |
+| `comments.status`        | `VISIBLE`, `DELETED`                                                |
+| `comment_reports.reason` | `SPAM`, `ABUSE`, `OBSCENE`, `PRIVACY`, `FALSE_INFO`, `ETC`          |
+| `comment_reports.status` | `PENDING`, `RESOLVED_DELETED`, `RESOLVED_IGNORED`                   |
+
+> `users.role` 은 `20260806090000_add_editor_role.sql`, `pages.status` 는
+> `20260808000000_page_status_hidden.sql` 에서 값이 늘었다.
+>
+> **`users.status = 'BLOCKED'` 의 효과는 "댓글 작성 불가" 하나뿐이다.** 로그인은
+> 막지 않는다 (`src/lib/auth/accountStatus.ts`). 차단 확인 팝업(Figma 1:2516)이
+> 약속하는 범위가 그것이고, 로그인까지 막으면 사용자는 사유를 구분하지 않는
+> 로그인 실패 문구만 보게 되어 무슨 일이 일어났는지 알 길이 없다.
+>
+> **`comment_reports.status` 에 차단이 없는 것은 의도다.** 차단의 정본은
+> `users.status` 이고, 신고 쪽에도 값을 두면 같은 사실을 두 컬럼이 주장하게 된다.
+> 차단은 신고를 종결시키지도 않는다 — "차단하되 댓글은 남긴다"가 정상적인 처리다.
 
 ---
 

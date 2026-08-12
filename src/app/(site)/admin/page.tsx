@@ -1,65 +1,22 @@
 import Link from "next/link";
 
 import AdminShell from "@/components/admin/AdminShell";
+import {
+  DELETED_PAGE_TITLE,
+  WITHDRAWN_USER_NAME,
+} from "@/components/admin/reports/labels";
+import { fetchApiAsUser } from "@/lib/api/serverFetch";
+import type { AdminDashboardBody } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/requireRole";
+import { formatDate } from "@/lib/format/date";
 import type { CommentPreview, ReportPreview } from "@/lib/types";
+import {
+  REASON_LABEL,
+  isCommentReportReason,
+} from "@/lib/validation/report";
 
-// ---- Dummy data ----
-
-const recentComments: CommentPreview[] = [
-  {
-    id: "1",
-    author: "닉네임",
-    date: "2024.02.13 00:00",
-    content:
-      "댓글 내용 미리보기 최대 세 줄까지 댓글 내용 미리보기 최대 세 줄까지 댓글 내용 미리보기",
-    postTitle: "게시물 제목",
-    commentCount: 2,
-  },
-  {
-    id: "2",
-    author: "닉네임",
-    date: "2024.02.13 00:00",
-    content: "한줄이면 이렇게 나타남",
-    postTitle: "여기는 한 줄까지",
-    commentCount: 4,
-  },
-  {
-    id: "3",
-    author: "닉네임",
-    date: "2024.02.13 00:00",
-    content:
-      "댓글 내용 미리보기 최대 세 줄까지 댓글 내용 미리보기 최대 세 줄까지 댓글 내용 미리보기",
-    postTitle: "게시물 제목",
-    commentCount: 1,
-  },
-];
-
-const recentReports: ReportPreview[] = [
-  {
-    id: "1",
-    author: "닉네임",
-    content:
-      "댓글 내용 미리보기 최대한 많이 보이게 댓글 내용 미리보기 최대한 많이 보이게 댓글 내용 미리보기",
-    reason: "스팸홍보/도배글, 욕설/생명경시/혐오/차별적 표현 외 1",
-    isNew: true,
-  },
-  {
-    id: "2",
-    author: "닉네임",
-    content:
-      "댓글 내용 미리보기 최대한 많이 보이게 댓글 내용 미리보기 최대한 많이 보이게 댓글 내용 미리보기",
-    reason: "개인정보 노출 우려",
-    isNew: true,
-  },
-  {
-    id: "3",
-    author: "닉네임",
-    content: "댓글이 짧으면 이런식",
-    reason: "욕설/생명경시/혐오/차별적 표현",
-    isNew: true,
-  },
-];
+/** 익명 댓글의 표시명. 공개 화면(CommentItem)과 같은 문구를 쓴다. */
+const ANONYMOUS_LABEL = "익명";
 
 // ---- Shared sub-components ----
 
@@ -133,17 +90,59 @@ function ChevronRight() {
 const CARD_CLASS =
   "bg-brand-red-white rounded-[20px] size-[190px] px-[18px] py-[20px] shrink-0";
 
-function CommentCard({ author, date, content, postTitle, commentCount }: CommentPreview) {
+/**
+ * 카드가 한 장도 없을 때.
+ *
+ * 섹션을 통째로 감추지 않는다 — 대시보드의 두 줄은 화면의 구조이고, 데이터가
+ * 없다고 사라지면 "여기 뭔가 있었는데 없어졌나"로 읽힌다. 카드 자리에 사실을
+ * 적어 두는 편이 낫다 (신고 섹션은 그와 별개로 권한 때문에 감춰진다).
+ */
+function EmptyCard({ message }: { message: string }) {
   return (
-    <div className={`${CARD_CLASS} flex flex-col items-end justify-between`}>
+    <div
+      className={`${CARD_CLASS} flex items-center justify-center text-center text-[15px] font-light leading-[21px] text-gray3`}
+    >
+      {message}
+    </div>
+  );
+}
+
+/**
+ * 최근 댓글 카드.
+ *
+ * **카드 전체가 그 게시물로 가는 링크다.** 대시보드에서 댓글을 보고 하는 일은
+ * "그 글로 가 보는 것"이고, 카드 안에 따로 링크를 두면 190x190 안에 누를 곳이
+ * 두 군데가 된다. 게시물이 지워졌으면 링크가 아니라 정적 카드다 — 상세가 404 다.
+ *
+ * 표시 문구를 여기서 정한다. service 는 authorName 을 null 로 접어 내려보내고
+ * (익명·탈퇴가 둘 다 null), 어느 쪽인지는 isAnonymous 가 가른다 — 공개
+ * 화면(CommentItem)과 같은 계약이다.
+ */
+function CommentCard({
+  authorName,
+  isAnonymous,
+  createdAt,
+  content,
+  pageId,
+  pageTitle,
+  commentCount,
+}: CommentPreview) {
+  const author = isAnonymous
+    ? ANONYMOUS_LABEL
+    : (authorName ?? WITHDRAWN_USER_NAME);
+
+  const body = (
+    <>
       <div className="flex flex-col gap-3 w-full">
         <div className="flex flex-col gap-[5px] w-full">
-          <div className="flex items-center gap-[5px]">
+          <div className="flex items-center gap-[5px] min-w-0">
             <AvatarIcon />
-            <span className="text-[13px] font-semibold text-black">{author}</span>
+            <span className="text-[13px] font-semibold text-black truncate">
+              {author}
+            </span>
           </div>
           <p className="text-[13px] font-light text-brand-red leading-[14px] text-right">
-            {date}
+            {formatDate(createdAt)}
           </p>
         </div>
         <p className="text-[15px] font-light leading-[21px] overflow-hidden line-clamp-3 text-left w-full">
@@ -152,22 +151,45 @@ function CommentCard({ author, date, content, postTitle, commentCount }: Comment
       </div>
       <div className="flex items-start justify-between gap-[10px] w-full">
         <p className="flex-1 text-[18px] font-bold leading-[21px] overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
-          {postTitle}
+          {pageTitle ?? DELETED_PAGE_TITLE}
         </p>
         <CommentBubble count={commentCount} />
       </div>
-    </div>
+    </>
+  );
+
+  const className = `${CARD_CLASS} flex flex-col items-end justify-between`;
+
+  return pageTitle === null ? (
+    <div className={className}>{body}</div>
+  ) : (
+    <Link href={`/pages/${pageId}`} className={className}>
+      {body}
+    </Link>
   );
 }
 
+/**
+ * 미처리 신고 카드.
+ *
+ * **익명을 가리지 않는다.** 댓글 카드와 반대이며, 이 섹션은 ADMIN 에게만
+ * 그려지고 카드를 누르면 가는 곳이 실명과 차단 버튼이 있는 신고 관리 화면이라
+ * 여기서만 가려 봐야 한 클릭 뒤에 드러난다 (reportService 주석).
+ *
+ * 사유 코드값 → 문구 변환이 여기 있다. service 는 코드값을 그대로 내려보낸다 —
+ * 시안 문구가 바뀔 때 서버 코드를 고치지 않기 위해서다. 계약을 벗어난 값이
+ * 오면 문구 대신 코드값을 그대로 그린다(빈 칸보다 낫다).
+ */
 function ReportCard({ author, content, reason, isNew }: ReportPreview) {
   return (
     <div className={`${CARD_CLASS} flex flex-col gap-[10px] items-end`}>
       <div className="flex flex-col gap-[5px] items-start w-full flex-1 min-h-0">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-[5px]">
+        <div className="flex items-center justify-between w-full gap-[6px]">
+          <div className="flex items-center gap-[5px] min-w-0">
             <AvatarIcon />
-            <span className="text-[13px] font-semibold text-black">{author}</span>
+            <span className="text-[13px] font-semibold text-black truncate">
+              {author || WITHDRAWN_USER_NAME}
+            </span>
           </div>
           {isNew && <div className="size-[10px] rounded-full bg-brand-red shrink-0" />}
         </div>
@@ -176,7 +198,7 @@ function ReportCard({ author, content, reason, isNew }: ReportPreview) {
         </p>
       </div>
       <p className="text-[13px] font-light text-brand-red leading-[18px] overflow-hidden line-clamp-2 text-left w-full">
-        {reason}
+        {isCommentReportReason(reason) ? REASON_LABEL[reason] : reason}
       </p>
     </div>
   );
@@ -292,6 +314,12 @@ export default async function AdminPage() {
   // 대시보드는 위키 운영 화면이므로 EDITOR 부터 들어온다 (ADMIN 은 계층상 포함).
   const session = await requireRole("EDITOR");
 
+  // 세션 쿠키를 실어야 한다. 대시보드는 사용자마다 다른 응답이고(신고 섹션이
+  // role 로 갈린다) fetchApiAsUser 가 no-store 로 고정한다 — 캐시되면 EDITOR
+  // 에게 신고 카드가, 남에게 익명 댓글의 작성자가 나갈 수 있다.
+  const { comments, reports } =
+    await fetchApiAsUser<AdminDashboardBody>("/api/admin/dashboard");
+
   // LNB 를 여기에도 붙인다. 관리 화면 중 한 곳에만 메뉴가 있으면 대시보드에서
   // 위키 관리로 갈 길이 주소창뿐이고, LNB 의 "대시보드" 항목도 돌아올 곳이 없는
   // 링크가 된다. 셸이 layout 이 아니라 컴포넌트라 페이지마다 이렇게 감싼다
@@ -381,20 +409,29 @@ export default async function AdminPage() {
           emoji="💬"
           title="최근 달린 댓글"
         >
-          {recentComments.map((c) => (
-            <CommentCard key={c.id} {...c} />
-          ))}
+          {comments.length === 0 ? (
+            <EmptyCard message="아직 댓글이 없습니다." />
+          ) : (
+            comments.map((c) => <CommentCard key={c.id} {...c} />)
+          )}
         </DashboardSection>
 
-        <DashboardSection
-          href="/admin/reports"
-          emoji="🚨"
-          title="댓글 신고 관리"
-        >
-          {recentReports.map((r) => (
-            <ReportCard key={r.id} {...r} />
-          ))}
-        </DashboardSection>
+        {/* **신고 섹션은 ADMIN 에게만 그려진다.** EDITOR 의 요청에는 서버가
+            빈 배열로 답하므로(라우트 주석) 여기서 role 을 다시 보지 않는다 —
+            판정을 두 곳에 적으면 한쪽만 고쳐질 때 어긋난다. 신고가 정말 0건인
+            ADMIN 도 같은 것을 보게 되는데, 그건 "처리할 것이 없다"는 정확한
+            답이라 문제가 되지 않는다. */}
+        {reports.length > 0 && (
+          <DashboardSection
+            href="/admin/reports"
+            emoji="🚨"
+            title="댓글 신고 관리"
+          >
+            {reports.map((r) => (
+              <ReportCard key={r.id} {...r} />
+            ))}
+          </DashboardSection>
+        )}
       </div>
     </AdminShell>
   );

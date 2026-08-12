@@ -9,14 +9,19 @@
 
 import type {
   AdminCategorySummary,
+  AdminCommentSummary,
   AdminPageSummary,
+  AdminReportSummary,
   AdminUserSummary,
   Category,
+  CommentPreview,
+  CommentReportStatus,
   CommentView,
   MyCommentSummary,
   PageDetail,
   PageStatus,
   PageSummary,
+  ReportPreview,
   Role,
   User,
   UserStatus,
@@ -247,3 +252,84 @@ export type AdminUserListBody = {
  * 그 외의 필드를 실으면 목록 응답에서 애써 뺀 PII 가 이쪽으로 새어 나간다.
  */
 export type UserRoleChangedBody = { id: string; role: Role };
+
+/**
+ * PATCH /api/admin/users/[id]/status — 차단 · 차단 해제 성공.
+ *
+ * UserRoleChangedBody 와 모양이 닮았지만 별칭으로 합치지 않는다. 두 응답이
+ * 답하는 질문이 다르고(무슨 권한인가 / 어떤 상태인가), 실리는 타입도 다르다.
+ *
+ * status 는 UserStatus 전체다 — BlockableStatus 로 좁히지 않는다. 요청으로는
+ * ACTIVE·BLOCKED 만 보낼 수 있지만 **응답은 서버가 실제로 읽어온 값**이고,
+ * 계약을 좁히면 클라이언트가 "WITHDRAWN 은 올 수 없다"고 믿게 된다.
+ */
+export type UserStatusChangedBody = { id: string; status: UserStatus };
+
+/**
+ * GET /api/admin/reports?status=&page=&size= — 어드민 신고 관리 목록.
+ *
+ * **사용자용 신고 접수에는 대응하는 응답 타입이 없다.** `POST
+ * /api/comments/[id]/reports` 는 204 로 답한다 — 신고 내역을 되돌려 보내면 그
+ * 응답으로 남이 이 댓글을 몇 번 신고했는지 들여다볼 수 있고, 신고 사실을
+ * 신고자 밖으로 내보내지 않는 것이 이 기능의 전제다.
+ *
+ * AdminReportSummary 에는 **익명 댓글의 실제 작성자가 실린다.** 공개 계약
+ * (CommentView)이 authorId 조차 빼는 것과 정반대이며, 근거는 types/comment.ts
+ * 에 있다 — 이 화면의 처리 액션 중 하나가 작성자 차단이다. 그래서 이 계약은
+ * assertRole("ADMIN") 뒤에서만 나간다.
+ *
+ * `status: null` 은 "필터 없음(전체)" 이다. 요청한 값이 아니라 서버가 실제로
+ * 적용한 값이라 `?status=오타` 로 들어와도 화면의 필터 탭이 서버와 같은 것을
+ * 가리킨다 (AdminUserListBody 와 같은 규칙).
+ */
+export type AdminReportListBody = {
+  reports: AdminReportSummary[];
+  total: number;
+  page: number;
+  size: number;
+  status: CommentReportStatus | null;
+};
+
+/**
+ * GET /api/admin/comments?page=&size= — 어드민 최근 댓글 목록.
+ *
+ * **CommentListBody 와 합치지 않는다.** 실리는 모델부터 다르고
+ * (AdminCommentSummary 는 게시물 제목과 작성자를 함께 단다), 저쪽은
+ * 페이지네이션이 없어서 total/page/size 가 아예 없다. 한 타입으로 묶으면 공개
+ * 댓글 목록 응답에도 그 칸들이 생겨서 "게시물 상세의 댓글에 페이지네이션이
+ * 있다"는 없는 계약이 만들어진다 (AdminPageListBody 와 같은 근거).
+ *
+ * status 필터를 되돌려주지 않는다 — 이 목록에는 필터가 없다. 서버가 접을 값이
+ * 없으면 되돌려줄 "적용된 값"도 존재하지 않는다 (AdminCategoryListBody 와 같은
+ * 판단).
+ *
+ * `PATCH`/`DELETE` 에 대응하는 타입이 없는 것은 댓글 삭제가 기존
+ * `DELETE /api/comments/[id]` 를 그대로 쓰기 때문이다 — 관리 화면용 삭제
+ * 라우트를 새로 만들면 삭제 권한 규칙이 두 곳에 생긴다.
+ */
+export type AdminCommentListBody = {
+  comments: AdminCommentSummary[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+/**
+ * GET /api/admin/dashboard — 대시보드 카드 두 줄.
+ *
+ * 두 목록이 한 응답에 있는 이유는 대시보드가 둘을 **언제나 함께** 그리기
+ * 때문이다 (라우트 주석 참조). total 이 없다 — 카드는 고정 3장이고 넘겨 볼
+ * 페이지가 없다. "몇 건인가"는 각 관리 화면이 답한다.
+ *
+ * **reports 가 빈 배열인 것과 신고가 없는 것을 구분하지 않는다.** EDITOR 의
+ * 요청에는 언제나 빈 배열이 온다 — 신고 조회는 ADMIN 만이라(reportService)
+ * 물어보지 않기 때문이다. 화면은 어차피 두 경우에 같은 것을 그린다(섹션 없음).
+ * 구분이 필요해지면 그때 플래그를 더한다.
+ *
+ * 카드 모델이 목록 모델과 다른 이유는 types/comment.ts 의 CommentPreview /
+ * ReportPreview 주석에 있다 — 익명 처리와 실리는 칸이 갈린다.
+ */
+export type AdminDashboardBody = {
+  comments: CommentPreview[];
+  reports: ReportPreview[];
+};

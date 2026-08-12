@@ -1,6 +1,7 @@
 import { formatDate } from "@/lib/format/date";
 import type { AdminUserSummary } from "@/lib/types";
 
+import AdminUserBlockButton from "./AdminUserBlockButton";
 import AdminUserRoleSelect from "./AdminUserRoleSelect";
 import {
   ROLE_LABEL,
@@ -27,6 +28,14 @@ const SELF_LOCK_REASON = "본인 역할은 변경할 수 없습니다";
 const WITHDRAWN_LOCK_REASON = "탈퇴한 계정입니다";
 
 /**
+ * 차단 버튼의 잠금 이유. **역할 셀렉트와 목록이 다르다** — 관리자끼리 강등은
+ * 되지만 차단은 안 된다(userService.changeUserStatus). 두 규칙이 다른 것이
+ * 의도라 문구도 나눠 둔다.
+ */
+const BLOCK_SELF_LOCK_REASON = "본인은 차단할 수 없습니다";
+const BLOCK_ADMIN_LOCK_REASON = "관리자는 차단할 수 없습니다";
+
+/**
  * 사용자 관리 목록 표 (Figma AdSaved 1:1490 의 표 규격을 따른다)
  *
  * **모바일 전용 목록 컴포넌트를 따로 만들지 않는다** (CLAUDE.md "반응형").
@@ -38,7 +47,8 @@ const WITHDRAWN_LOCK_REASON = "탈퇴한 계정입니다";
  *   ② 그럼에도 넘칠 수 있으므로 표 전체를 overflow-x 래퍼로 감싼다. 표가 자기
  *      안에서 스크롤해야 페이지 body 가 가로로 밀리지 않는다.
  *
- * **차단/해제 버튼이 없는 것은 의도다.** 근거는 AdminUserList 주석에 있다.
+ * 조작 칸이 둘이다(역할 셀렉트 · 차단 버튼). 좁은 화면에서 한 칸에 나란히
+ * 두면 둘 다 눌리지 않을 만큼 좁아지므로 세로로 쌓고 lg 에서 가로로 편다.
  */
 export default function AdminUserTable({
   users,
@@ -77,7 +87,7 @@ export default function AdminUserTable({
             </th>
             {/* 조작 칸은 머리글 문구가 없다 (AdminPageTable 과 같은 규칙). */}
             <th scope="col" className="py-[12px] text-right">
-              <span className="sr-only">역할 변경</span>
+              <span className="sr-only">역할 변경 · 차단</span>
             </th>
           </tr>
         </thead>
@@ -95,6 +105,17 @@ export default function AdminUserTable({
               : isWithdrawn
                 ? WITHDRAWN_LOCK_REASON
                 : undefined;
+
+            // 차단은 관리자를 대상에서 통째로 뺀다 — 역할 변경과 다른 규칙이며
+            // 근거는 userService.changeUserStatus 주석에 있다(관리 권한이
+            // 통째로 잠기는 상태를 구조적으로 막는다).
+            const blockLockedReason = isSelf
+              ? BLOCK_SELF_LOCK_REASON
+              : user.role === "ADMIN"
+                ? BLOCK_ADMIN_LOCK_REASON
+                : isWithdrawn
+                  ? WITHDRAWN_LOCK_REASON
+                  : undefined;
 
             return (
               <tr
@@ -144,11 +165,18 @@ export default function AdminUserTable({
                 </td>
 
                 <td className="py-[14px] text-right">
-                  <AdminUserRoleSelect
-                    userId={user.id}
-                    role={user.role}
-                    lockedReason={lockedReason}
-                  />
+                  <div className="flex flex-col items-end gap-[8px] lg:flex-row lg:items-start lg:justify-end">
+                    <AdminUserRoleSelect
+                      userId={user.id}
+                      role={user.role}
+                      lockedReason={lockedReason}
+                    />
+                    <AdminUserBlockButton
+                      userId={user.id}
+                      status={user.status}
+                      lockedReason={blockLockedReason}
+                    />
+                  </div>
                 </td>
               </tr>
             );

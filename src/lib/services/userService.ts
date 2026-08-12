@@ -9,6 +9,7 @@
 // 적으면 한쪽만 고쳐질 때 가입과 중복확인 버튼의 답이 갈린다.
 // =============================================================
 
+import { canSignIn } from "@/lib/auth/accountStatus";
 import { assertAuthenticated, assertRole } from "@/lib/auth/guards";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import type { Role } from "@/lib/auth/roles";
@@ -23,6 +24,12 @@ import {
 import * as userRepository from "@/lib/repositories/userRepository";
 import type { UserWithHash } from "@/lib/repositories/userRepository";
 import type { AdminUserSummary, User, UserStatus } from "@/lib/types";
+import {
+  BLOCK_ADMIN_TARGET,
+  BLOCK_SELF,
+  BLOCK_WITHDRAWN_TARGET,
+  type BlockableStatus,
+} from "@/lib/validation/report";
 import {
   ROLE_SELF_CHANGE,
   ROLE_WITHDRAWN_TARGET,
@@ -76,24 +83,34 @@ export async function assertLoginIdAvailable(loginId: string): Promise<void> {
 // 다른 사용자 조회가 필요해지면 그건 관리자 기능이며 별도 함수여야 한다.
 
 /**
- * 세션의 사용자를 DB 에서 꺼낸다. ACTIVE 가 아니면 로그인하지 않은 것과 같다.
+ * 세션의 사용자를 DB 에서 꺼낸다. 로그인할 수 없는 계정이면 401.
  *
- * 토큰이 7일 살아 있어서, 그 사이 차단·탈퇴된 계정이 발급 시점의 상태로
- * 계속 통과하면 안 된다 (authService.getCurrentUser 와 같은 이유).
+ * 토큰이 7일 살아 있어서, 그 사이 탈퇴된 계정이 발급 시점의 상태로 계속
+ * 통과하면 안 된다 (authService.getCurrentUser 와 같은 이유).
+ *
+ * ── 이름이 loadActiveUser 에서 바뀐 이유 (기존 동작 변경) ────
+ * 예전에는 `status !== "ACTIVE"` 로 걸러서 **차단된 사용자가 자기 회원정보를
+ * 열지도 못했다.** 차단이 "댓글 제한"이 된 지금(auth/accountStatus.ts) 그건
+ * 앞뒤가 맞지 않는다 — 로그인은 되는데 마이페이지만 401 이 나면 사용자는
+ * 고장으로 읽는다. 판정을 canSignIn 으로 옮기고 이름도 사실에 맞춘다.
+ *
+ * 차단된 사용자가 통과한다고 **아무 제한이 없어지는 것은 아니다.** 댓글 작성은
+ * commentService 가 따로 막고, 이 함수를 쓰는 경로(내 정보 조회·수정·비밀번호
+ * 변경·탈퇴)는 전부 자기 계정에 대한 조작이라 차단이 막을 이유가 없다.
  */
-async function loadActiveUser(session: SessionPayload): Promise<User> {
+async function loadSignedInUser(session: SessionPayload): Promise<User> {
   const user = await userRepository.findById(session.userId);
-  if (!user || user.status !== "ACTIVE") throw new UnauthorizedError();
+  if (!user || !canSignIn(user.status)) throw new UnauthorizedError();
 
   return user;
 }
 
 /** 위와 같되 해시까지 가져온다. 비밀번호 대조가 필요한 경로 전용. */
-async function loadActiveUserWithHash(
+async function loadSignedInUserWithHash(
   session: SessionPayload,
 ): Promise<UserWithHash> {
   const user = await userRepository.findByIdWithHash(session.userId);
-  if (!user || user.status !== "ACTIVE") throw new UnauthorizedError();
+  if (!user || !canSignIn(user.status)) throw new UnauthorizedError();
 
   return user;
 }
@@ -104,7 +121,7 @@ export async function getMyProfile(
 ): Promise<User> {
   assertAuthenticated(session);
 
-  return loadActiveUser(session);
+  return loadSignedInUser(session);
 }
 
 /**
@@ -122,9 +139,13 @@ export async function updateMyProfile(
 ): Promise<User> {
   assertAuthenticated(session);
 
-  // 대상이 아직 유효한 계정인지부터 확인한다. 차단된 계정이 자기 정보를
-  // 고치고 있게 두지 않는다.
-  await loadActiveUser(session);
+  // 대상이 아직 유효한 계정인지부터 확인한다. 탈퇴한 계정의 토큰이 남아 있는
+  // 상태로 회원정보가 고쳐지면 안 된다.
+  //
+  // **차단된 계정은 통과시킨다.** 차단은 댓글 제한이지 계정 잠금이 아니라
+  // (auth/accountStatus.ts), 자기 이름이나 전화번호를 고치는 것까지 막을
+  // 근거가 없다 — 그건 남에게 보이는 행동이 아니다.
+  await loadSignedInUser(session);
 
   const parsed = parseProfile(input);
   if (!parsed.ok) throw new ValidationError(parsed.errors);
@@ -175,7 +196,7 @@ export async function changePassword(
   const errors = validatePasswordChange(input);
   if (Object.keys(errors).length > 0) throw new ValidationError(errors);
 
-  const user = await loadActiveUserWithHash(session);
+  const user = await loadSignedInUserWithHash(session);
 
   // 자격 증명이 틀린 것이므로 403(권한 없음)이 아니라 401 이다.
   if (!(await verifyPassword(currentPassword, user.passwordHash))) {
@@ -207,7 +228,9 @@ export async function changePassword(
  *
  * 순서에 규칙이 있다.
  *   ① 로그인 여부 — 세션이 없으면 401.
- *   ② 계정 상태 — ACTIVE 가 아니면(이미 탈퇴했거나 차단됐다) 진행하지 않는다.
+ *   ② 계정 상태 — 이미 탈퇴한 계정이면 진행하지 않는다. 차단된 계정은 탈퇴할
+ *      수 있다 — 차단은 댓글 제한일 뿐이고, 나가겠다는 사람을 계정 상태로
+ *      붙잡아 두는 것은 이 규칙이 할 일이 아니다.
  *   ③ 아이디 대조 — **세션의 id 로 읽어온 login_id** 와 입력값을 맞춘다.
  *   ④ 소프트 삭제.
  *
@@ -227,9 +250,9 @@ export async function withdrawMe(
 ): Promise<void> {
   assertAuthenticated(session);
 
-  // ACTIVE 가 아니면 UnauthorizedError 다 — 이미 탈퇴한 계정의 토큰이 남아 있는
+  // 탈퇴한 계정이면 UnauthorizedError 다 — 이미 지운 계정의 토큰이 남아 있는
   // 상황이므로 "로그인하지 않은 것과 같다"가 정확한 답이다.
-  const user = await loadActiveUser(session);
+  const user = await loadSignedInUser(session);
 
   // ── 관리자는 스스로 탈퇴할 수 없다 ──────────────────────────
   // 관리자 계정은 공개 가입으로 만들어지지 않고 DB 에서 손으로 승격된다
@@ -386,4 +409,87 @@ export async function changeUserRole(
   // 이유가 없다 — 셀렉트는 값이 바뀔 때만 요청을 보내고, 결과 화면은 어느
   // 쪽이든 같다.
   return userRepository.updateRole(targetUserId, newRole);
+}
+
+/**
+ * 다른 사용자를 차단하거나 차단을 푼다.
+ *
+ * ── 차단이 실제로 하는 일 ───────────────────────────────────
+ * users.status 를 BLOCKED 로 바꾸는 것이 전부이고, 그 값이 효과를 갖는 자리는
+ * **commentService.createComment 한 곳**이다 (auth/accountStatus 의
+ * canWriteComment). 로그인·조회·자기 정보 수정은 그대로 된다 — 시안 문구
+ * (1:2516 "차단된 사용자는 댓글 기능이 제한됩니다")가 약속한 범위가 그것이다.
+ *
+ * **이미 쓴 댓글은 지우지 않는다.** 차단은 앞으로를 막는 조치이고 과거 발언에
+ * 대한 판단이 아니다 — 지워야 할 댓글이 있으면 신고 처리(reportService)나
+ * 댓글 관리 화면에서 건별로 지운다. 차단 하나로 그 사람의 모든 발언이
+ * 사라지면 대화의 맥락이 통째로 무너지고, 되돌릴 재료도 없다(댓글에는
+ * page_revisions 에 해당하는 이력이 없다).
+ *
+ * **차단 기간이 없다.** 영구 차단뿐이고 해제는 관리자가 손으로 한다 — 만료
+ * 시각을 두면 그것을 확인해서 되돌릴 주체(스케줄러)가 필요한데, 그런 것이
+ * 없는 지금 만료 컬럼은 아무도 읽지 않는 값이 된다.
+ *
+ * ── 순서 규칙은 changeUserRole 과 같다 ──────────────────────
+ *   ① 권한 — ADMIN 만.
+ *   ② 자기 자신인가 — **대상을 조회하기도 전에** 막는다. 판정에 DB 값이
+ *      필요 없다. 마지막 관리자가 스스로를 차단해도 로그인은 되지만, 관리자가
+ *      자기에게 제재를 거는 조작에 정상적인 쓰임이 없다.
+ *   ③ 대상이 있는가 — 없으면 404.
+ *   ④ ADMIN 인가 — 거절. **역할 변경에서 쓴 것과 같은 판단이며 "마지막
+ *      관리자인가"를 세지 않는다.** 세는 순간 그 SELECT 와 UPDATE 사이에
+ *      다른 요청이 끼면 둘 다 통과한다(TOCTOU). 관리자끼리 서로를 차단할 수
+ *      없게 못박아 두면 관리 권한이 통째로 잠기는 상태가 구조적으로 안 생긴다.
+ *      강등이 필요하면 changeUserRole 이 있고, 그쪽은 자기 자신만 막는다.
+ *   ⑤ 탈퇴 계정인가 — 거절. 되돌릴 수 없는 종점이라 상태를 덮어쓰면 탈퇴
+ *      사실이 사라진다 (changeUserRole 과 같은 근거).
+ *   ⑥ UPDATE.
+ *
+ * 차단과 해제를 **한 함수로 둔다.** 둘은 같은 컬럼을 오가는 같은 조작이고
+ * 위 검사 다섯 개가 전부 공통이다 — 나누면 그 목록이 두 벌이 되고 한쪽만
+ * 고쳐진다. 어느 방향인지는 status 인자가 말한다.
+ */
+export async function changeUserStatus(
+  session: SessionPayload | null,
+  targetUserId: string,
+  status: BlockableStatus,
+): Promise<User> {
+  assertRole(session, "ADMIN");
+
+  if (session.userId === targetUserId) {
+    throw new ForbiddenError(BLOCK_SELF);
+  }
+
+  const target = await userRepository.findById(targetUserId);
+  if (!target) throw new NotFoundError(USER_NOT_FOUND);
+
+  if (target.role === "ADMIN") {
+    throw new ForbiddenError(BLOCK_ADMIN_TARGET);
+  }
+
+  if (target.status === "WITHDRAWN") {
+    throw new ForbiddenError(BLOCK_WITHDRAWN_TARGET);
+  }
+
+  return userRepository.updateStatus(targetUserId, status);
+}
+
+/**
+ * 차단 · 차단 해제의 이름 붙은 입구.
+ *
+ * changeUserStatus 를 직접 부르는 대신 이 둘을 쓰면 호출부에서 무슨 일이
+ * 일어나는지가 인자가 아니라 함수 이름으로 읽힌다. 규칙은 한 벌뿐이다.
+ */
+export async function blockUser(
+  session: SessionPayload | null,
+  targetUserId: string,
+): Promise<User> {
+  return changeUserStatus(session, targetUserId, "BLOCKED");
+}
+
+export async function unblockUser(
+  session: SessionPayload | null,
+  targetUserId: string,
+): Promise<User> {
+  return changeUserStatus(session, targetUserId, "ACTIVE");
 }
