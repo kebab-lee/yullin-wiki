@@ -22,9 +22,24 @@ import {
 } from '@/lib/validation/page'
 import EditorToolbar from './EditorToolbar'
 import { createImageUpload, uploadImagesInto } from './imageUpload'
+import {
+  applyMarkdownOffer,
+  createMarkdownPaste,
+  type MarkdownOffer,
+} from './markdownPaste'
 import { createSlashCommand } from './slashCommand'
 
 type SaveStatus = 'idle' | 'saving' | 'saved'
+
+/**
+ * 에디터 위에 뜨는 마크다운 안내. **하나의 상태로 두 국면을 표현한다** —
+ * 물어보는 중(offer)과 변환 결과 보고(result)는 같은 자리에 번갈아 뜨고
+ * 동시에 뜰 일이 없다. 플래그를 둘로 나누면 둘 다 켜진 경우를 화면이 따로
+ * 처리해야 한다 (CLAUDE.md "기존 플래그를 재사용한다").
+ */
+type MarkdownBanner =
+  | { kind: 'offer'; offer: MarkdownOffer }
+  | { kind: 'result'; notes: readonly string[]; remoteImages: number }
 
 /**
  * 작성 화면과 수정 화면은 **같은 폼**이다. 채우는 칸도, 검증 규칙도, 저장 후
@@ -86,6 +101,10 @@ export default function PageEditorForm(props: PageEditorFormProps) {
   const [errors, setErrors] = useState<PageFormErrors>({})
   /** 특정 칸에 붙지 않는 실패(401/403/404/네트워크)를 담는다. */
   const [formError, setFormError] = useState<string | null>(null)
+  /** 마크다운 붙여넣기 제안 · 변환 결과. 에디터 바로 위에 그린다. */
+  const [markdownBanner, setMarkdownBanner] = useState<MarkdownBanner | null>(
+    null
+  )
 
   const imageInputRef = useRef<HTMLInputElement>(null)
 
@@ -153,6 +172,20 @@ export default function PageEditorForm(props: PageEditorFormProps) {
     setFormError(message)
   }, [])
 
+  /**
+   * 마크다운 제안이 생기거나 사라졌다.
+   *
+   * 사라졌다는 알림(null)이 **결과 보고까지 지우지는 않게** 한다. 변환 자체가
+   * 문서를 바꾸는 편집이라 확장은 그 직후 제안을 거두는데, 그때 결과 문구가
+   * 함께 사라지면 무엇이 변환되지 않았는지 읽을 새가 없다.
+   */
+  const reportMarkdownOffer = useCallback((offer: MarkdownOffer | null) => {
+    setMarkdownBanner((prev) => {
+      if (offer) return { kind: 'offer', offer }
+      return prev?.kind === 'offer' ? null : prev
+    })
+  }, [])
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -168,6 +201,9 @@ export default function PageEditorForm(props: PageEditorFormProps) {
       // 붙여넣기·드롭으로 들어오는 이미지를 스토리지 업로드로 돌린다.
       // 이것이 없으면 ProseMirror 기본 동작이 base64 를 본문 JSON 에 박는다.
       createImageUpload(reportImageError),
+      // 마크다운 원문을 붙여넣었을 때 서식 적용을 **제안**한다. 자동으로
+      // 바꾸지 않으므로 이 확장이 없을 때와 붙여넣기 결과가 같다.
+      createMarkdownPaste(reportMarkdownOffer),
     ],
     editorProps: {
       attributes: { class: 'outline-none min-h-[500px] py-6' },
@@ -232,6 +268,18 @@ export default function PageEditorForm(props: PageEditorFormProps) {
       editor.state.selection.from,
       reportImageError
     )
+  }
+
+  // ---- 마크다운 붙여넣기 ----
+
+  /**
+   * 제안을 받아들인다. 변환은 트랜잭션 하나라 Ctrl+Z 로 통째로 되돌아간다 —
+   * 잘못 눌러도 붙여넣은 원문이 그대로 남는다.
+   */
+  const handleMarkdownApply = (offer: MarkdownOffer) => {
+    if (!editor) return
+    const { notes, remoteImages } = applyMarkdownOffer(editor, offer)
+    setMarkdownBanner({ kind: 'result', notes, remoteImages })
   }
 
   // ---- 액션 핸들러 ----
@@ -488,6 +536,61 @@ export default function PageEditorForm(props: PageEditorFormProps) {
       {/* ── 툴바 ── */}
       {editor && (
         <EditorToolbar editor={editor} onImageUpload={triggerImageUpload} />
+      )}
+
+      {/* ── 마크다운 붙여넣기 안내 ──
+          제안과 결과가 같은 자리에 뜬다. 에디터 위에 두는 이유: 방금 붙여넣은
+          내용 바로 곁이라 무엇에 대한 이야기인지 찾을 필요가 없다. */}
+      {markdownBanner?.kind === 'offer' && (
+        <div className="flex flex-wrap items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-brand-red-white text-[13px] text-black">
+          <span className="mr-auto">
+            마크다운 문서로 보입니다. 서식을 적용할까요?
+          </span>
+          <button
+            type="button"
+            onClick={() => handleMarkdownApply(markdownBanner.offer)}
+            className="min-h-11 px-4 rounded-full bg-brand-red text-white text-[13px] font-medium hover:opacity-90 transition-opacity"
+          >
+            서식 적용
+          </button>
+          <button
+            type="button"
+            onClick={() => setMarkdownBanner(null)}
+            className="min-h-11 px-4 rounded-full border border-gray2 text-[13px] text-gray3 hover:border-brand-red hover:text-brand-red transition-colors"
+          >
+            그대로 두기
+          </button>
+        </div>
+      )}
+
+      {markdownBanner?.kind === 'result' && (
+        <div className="flex items-start gap-2 mt-3 px-3 py-2 rounded-lg bg-gray-50 text-[13px] text-gray3">
+          <div className="flex-1 min-w-0">
+            <p className="text-black">마크다운 서식을 적용했습니다.</p>
+            {/* 조용히 버리지 않는다 — 무엇이 그대로 오지 못했는지 그대로 읽어준다. */}
+            {markdownBanner.notes.map((note) => (
+              <p key={note} className="mt-1">
+                {note}
+              </p>
+            ))}
+            {/* 원격 이미지는 실패가 아니라 알아둘 일이다. 원본이 사라지면
+                본문에서도 사라지는 이미지라는 뜻이다. */}
+            {markdownBanner.remoteImages > 0 && (
+              <p className="mt-1">
+                외부 이미지 {markdownBanner.remoteImages}장이 포함됐습니다. 원본
+                주소가 바뀌면 본문에서도 보이지 않게 됩니다.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setMarkdownBanner(null)}
+            className="size-11 -my-2 -mr-2 shrink-0 flex items-center justify-center text-gray3 hover:text-brand-red transition-colors"
+            aria-label="안내 닫기"
+          >
+            ×
+          </button>
+        </div>
       )}
 
       {/* ── 에디터 본문 ── */}

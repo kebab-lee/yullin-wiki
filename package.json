@@ -20,6 +20,7 @@
     "@tiptap/suggestion": "^3.22.5",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.5",
+    "marked": "^18.0.9",
     "next": "^15.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
