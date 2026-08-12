@@ -57,8 +57,30 @@ const NOT_FOUND_PAGE = "게시물을 찾을 수 없습니다.";
  * 조건을 호출부마다 적으면 한쪽만 고쳐질 때 목록에는 안 뜨는 글이 상세에서는
  * 열린다.
  */
+function isPublicState(status: PageStatus, deletedAt: string | null): boolean {
+  return status === "PUBLISHED" && deletedAt === null;
+}
+
 function isPublic(page: PageDetail): boolean {
-  return page.status === "PUBLISHED" && page.deletedAt === null;
+  return isPublicState(page.status, page.deletedAt);
+}
+
+/**
+ * 공개 게시물인지 확인만 한다. 아니면 NotFoundError.
+ *
+ * **commentService 를 위해 있는 문이다.** 댓글을 달거나 읽기 전에 "그 글이
+ * 공개 화면에 있는 글인가"를 물어야 하는데, 그 규칙을 댓글 쪽에 다시 적으면
+ * 사본이 하나 더 생겨서 숨긴 글의 댓글만 계속 열리는 어긋남이 생긴다.
+ *
+ * getPage 를 부르지 않는 이유는 무게다. 그쪽은 본문 JSON·태그·작성자를 전부
+ * 실어 오는데 여기서 필요한 것은 status 와 deleted_at 두 칸뿐이다.
+ * 되돌려주는 값이 없는 것도 의도다 — 호출부가 게시물을 쓰지 않는다.
+ */
+export async function assertPageIsPublic(id: string): Promise<void> {
+  const page = await pageRepository.findVisibilityById(id);
+  if (!page || !isPublicState(page.status, page.deletedAt)) {
+    throw new NotFoundError(NOT_FOUND_PAGE);
+  }
 }
 
 /**

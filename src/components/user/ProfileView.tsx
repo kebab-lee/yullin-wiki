@@ -40,16 +40,16 @@ function InfoRow({ label, value }: { label: string; value: string }) {
  * 서버 컴포넌트다. 이 화면에는 상태도 이벤트도 없다 — "수정"도 "계정 삭제하기"도
  * 링크 이동이고, 판단과 제출은 이동한 화면이 한다.
  *
- * **하단 "내 댓글 모아보기"(Frame 1495)는 렌더하지 않는다.** 댓글 기능 자체가
- * 아직 없어서 자리만 비워두면 빈 상자가 영구히 남는데, 그건 "곧 생긴다"는
- * 약속을 화면에 새기는 일이다. 댓글 슬라이스가 들어올 때 이 컴포넌트 아래에
- * 섹션을 더한다.
+ * **하단 "내 댓글 모아보기"(Frame 1495 / 1:1047)는 여기 없다.** 마이페이지가
+ * 형제로 렌더한다(MyCommentList) — 이 컴포넌트가 답하는 것은 "내 회원정보"
+ * 하나이고, 댓글 목록은 다른 API 에서 오는 다른 관심사다. 아래쪽 여백을
+ * 페이지가 갖는 이유도 그것이다(두 섹션이 쌓인 뒤에 붙어야 하는 여백이다).
  */
 export default function ProfileView({ user }: { user: User }) {
   return (
     // Figma: x=316 → 1512 아트보드에서 880px 중앙 정렬. y=210 은 헤더(131px) 아래 79px.
     // lg 미만에서는 인사말 위 · 정보 아래로 쌓는다 (수정·탈퇴 화면과 같은 배치).
-    <div className="mx-auto flex w-full max-w-hero flex-col gap-[24px] px-4 pb-[80px] pt-[32px] lg:flex-row lg:gap-[90px] lg:px-0 lg:pb-[120px] lg:pt-[79px]">
+    <div className="mx-auto flex w-full max-w-hero flex-col gap-[24px] px-4 pt-[32px] lg:flex-row lg:gap-[90px] lg:px-0 lg:pt-[79px]">
       {/* Figma Frame 1500 (195x136) */}
       <div className="w-full lg:w-[195px] lg:shrink-0">
         <p className="text-[32px] font-extrabold leading-[45px] text-black">

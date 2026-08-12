@@ -14,6 +14,21 @@ import Image from "next/image";
 /** Figma 1:380 기준 카드 3장. */
 const RECENT_LIMIT = 3;
 
+/**
+ * 홈에 노출할 항목 버튼 수.
+ *
+ * **홈은 전체 목록이 아니라 "일부 + 더보기"다.** Figma 카테고리 줄(1:373)이
+ * 510px 고정 폭이고 그 안이 110px 버튼 3개 + 구분선 2개(110×3 + 44.5×4 + 1×2
+ * = 510)로 짜여 있다. 그 오른쪽에 더보기(1:379)가 이미 붙어 있는 것이 시안이
+ * 전부 그리지 않는다는 증거다. 전부 그리면 항목이 늘 때마다 이 줄이
+ * 가로로 밀려 나가고, 데스크톱에서는 같은 줄의 섹션 헤더·더보기를 눌러
+ * 찌그러뜨린다.
+ *
+ * 넘치는 항목은 사라지지 않는다 — 더보기(`/categories`)가 전부 보여준다.
+ * 값을 키우려면 시안의 510px 폭도 함께 바뀌어야 한다.
+ */
+const HOME_CATEGORY_LIMIT = 3;
+
 export default async function HomePage() {
   // 홈은 (site) 그룹 밖이라 layout 의 헤더를 받지 않는다.
   // HeroHeaderBar 가 헤더를 겸하므로 role 도 여기서 직접 읽는다.
@@ -29,7 +44,10 @@ export default async function HomePage() {
     ),
   ]);
 
-  const categories = categoryBody.categories;
+  // 앞의 HOME_CATEGORY_LIMIT 개만 그린다. 정렬은 여기서 다시 하지 않는다 —
+  // GET /api/categories 가 이미 sortOrder 오름차순이고(categoryService.listCategories),
+  // 화면이 같은 규칙을 한 번 더 적으면 정렬 기준이 두 곳으로 갈린다.
+  const categories = categoryBody.categories.slice(0, HOME_CATEGORY_LIMIT);
   const recentPages = recentBody.pages;
 
   return (

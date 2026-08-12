@@ -1,12 +1,21 @@
 import { notFound } from "next/navigation";
 
+import CommentSection from "@/components/comment/CommentSection";
 import ArticleAdminActions from "@/components/page/ArticleAdminActions";
 import ArticleBody from "@/components/page/ArticleBody";
 import ArticleHeader from "@/components/page/ArticleHeader";
 import ArticleToc from "@/components/page/ArticleToc";
 import { REVALIDATE } from "@/lib/api/baseUrl";
-import { ApiResponseError, fetchApi } from "@/lib/api/serverFetch";
-import type { CategoryListBody, PageDetailBody } from "@/lib/api/types";
+import {
+  ApiResponseError,
+  fetchApi,
+  fetchApiAsUser,
+} from "@/lib/api/serverFetch";
+import type {
+  CategoryListBody,
+  CommentListBody,
+  PageDetailBody,
+} from "@/lib/api/types";
 import { hasRole } from "@/lib/auth/roles";
 import { getViewerRole } from "@/lib/auth/viewer";
 import { buildToc } from "@/lib/editor/toc";
@@ -33,7 +42,11 @@ export const dynamic = "force-dynamic";
  *
  * EDITOR 이상에게는 수정·삭제 버튼이 붙는다. **버튼 노출은 표시용 판정일 뿐**
  * 이고 실제 차단은 pageService 의 assertRole 이 한다 — API 는 이 화면을 거치지
- * 않고 직접 호출된다. 댓글·조회수는 아직 범위가 아니다.
+ * 않고 직접 호출된다. 조회수는 아직 범위가 아니다.
+ *
+ * 댓글은 로그인한 사용자가 쓴다 — **이 화면에서 처음으로 신뢰 경계 밖의 값이
+ * 그려진다.** 그래서 댓글 본문은 평문이고 JSX 텍스트로 렌더된다
+ * (CommentItem 주석). 본문(ArticleBody)만 innerHTML 을 쓴다.
  */
 export default async function ArticlePage({
   params,
@@ -42,7 +55,7 @@ export default async function ArticlePage({
 }) {
   const { id } = await params;
 
-  const [viewerRole, detail, categoryBody] = await Promise.all([
+  const [viewerRole, detail, categoryBody, commentBody] = await Promise.all([
     getViewerRole(),
     // 404 만 not-found 로 옮기고 나머지 실패(DB 장애 등)는 그대로 터뜨린다.
     // 전부 삼키면 장애가 "없는 게시물"로 위장된다.
@@ -54,6 +67,19 @@ export default async function ArticlePage({
       },
     ),
     fetchApi<CategoryListBody>("/api/categories", REVALIDATE.categories),
+    // **fetchApi(캐시)가 아니라 fetchApiAsUser(no-store + 쿠키)다.** 이유가 둘이다.
+    //   · 응답이 보는 사람마다 다르다 — isMine 이 실린다. 초 단위라도 캐싱하면
+    //     남의 댓글에 내 삭제 버튼이 붙는다.
+    //   · 방금 쓴 댓글이 바로 보여야 한다(router.refresh 뒤).
+    // 게시물이 없을 때(위 404)는 이 응답도 404 지만, 그 판정은 detail 이 이미
+    // 내렸으므로 여기서는 조용히 빈 목록으로 접는다.
+    fetchApiAsUser<CommentListBody>(`/api/pages/${id}/comments`).catch(
+      (error: unknown) => {
+        if (error instanceof ApiResponseError && error.status === 404)
+          return null;
+        throw error;
+      },
+    ),
   ]);
 
   if (!detail) notFound();
@@ -68,6 +94,13 @@ export default async function ArticlePage({
   // 소유권은 보지 않는다 — EDITOR 이상이면 누가 쓴 글이든 고치고 지운다.
   const canEdit = viewerRole !== "GUEST" && hasRole(viewerRole, "EDITOR");
 
+  // 댓글은 조작 주체가 둘로 갈린다. 쓰는 것은 로그인한 누구나이고, 남의 댓글을
+  // 내리는 것은 ADMIN 뿐이다 — EDITOR 는 문서 권한이지 발언을 내리는 권한이
+  // 아니다(commentService.deleteComment 주석). canEdit 을 재사용하지 않는 이유다.
+  const isLoggedIn = viewerRole !== "GUEST";
+  const canModerate = isLoggedIn && hasRole(viewerRole, "ADMIN");
+  const comments = commentBody?.comments ?? [];
+
   return (
     <div className="mx-auto max-w-page">
       {/* lg 이상은 Figma 그대로(목차 x=209(245폭) · 본문 x=503(800폭) → 간격 49px).
@@ -76,12 +109,23 @@ export default async function ArticlePage({
         <ArticleToc entries={buildToc(page.content)} />
 
         <article className="min-w-0 flex-1">
-          <ArticleHeader page={page} category={category} />
+          <ArticleHeader
+            page={page}
+            category={category}
+            commentCount={comments.length}
+          />
           <ArticleBody content={page.content} />
 
           {canEdit && (
             <ArticleAdminActions pageId={page.id} title={page.title} />
           )}
+
+          <CommentSection
+            pageId={page.id}
+            comments={comments}
+            canModerate={canModerate}
+            isLoggedIn={isLoggedIn}
+          />
         </article>
       </div>
     </div>

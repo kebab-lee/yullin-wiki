@@ -12,6 +12,8 @@ import type {
   AdminPageSummary,
   AdminUserSummary,
   Category,
+  CommentView,
+  MyCommentSummary,
   PageDetail,
   PageStatus,
   PageSummary,
@@ -106,6 +108,39 @@ export type PageSearchListBody = PagedPageListBody & { query: string };
 
 /** GET /api/pages/[id] — 상세. 여기서만 content(ProseMirror JSON)가 실린다. */
 export type PageDetailBody = { page: PageDetail };
+
+/**
+ * GET /api/pages/[id]/comments — 한 게시물의 댓글 전부.
+ *
+ * **페이지네이션이 없다.** Figma 의 댓글 목록(1:545)에 페이지 UI 가 없고,
+ * 댓글은 위에서 아래로 한 줄기로 읽는 대화라 잘라 놓으면 답글이 부모와 다른
+ * 페이지로 갈라진다. 그래서 total 도 없다 — `comments.length` 가 곧 전체다.
+ *
+ * **평면 배열이다.** 대댓글도 같은 배열에 parentId 를 달고 들어 있다
+ * (근거는 commentRepository.findByPageId 주석). 화면이 한 번 묶는다.
+ *
+ * CommentView 에 authorId 가 없는 것은 익명 댓글 때문이다 — 근거는
+ * types/comment.ts 에 있다.
+ */
+export type CommentListBody = { comments: CommentView[] };
+
+/**
+ * POST /api/pages/[id]/comments — 댓글 작성 성공.
+ *
+ * 방금 만든 댓글을 통째로 돌려준다. 게시물 작성이 id 만 돌려주는 것과 다른
+ * 이유는 성공 후에 하는 일이 다르기 때문이다 — 에디터는 `/pages/[id]` 로
+ * 이동하지만, 댓글 폼은 제자리에 남아 방금 쓴 댓글이 목록에 나타나야 한다.
+ * 그 한 줄을 그리는 데 필요한 값(작성자 표시·익명 여부·isMine)은 서버만 안다.
+ */
+export type CommentCreatedBody = { comment: CommentView };
+
+/**
+ * GET /api/users/me/comments — 마이페이지 "내 댓글 모아보기".
+ *
+ * **경로에 userId 가 없다.** 대상은 언제나 세션의 주인이다
+ * (`/api/users/me` 와 같은 규칙).
+ */
+export type MyCommentListBody = { comments: MyCommentSummary[] };
 
 /** GET /api/auth/me — 현재 로그인한 사용자. */
 export type CurrentUserBody = { user: User };

@@ -75,9 +75,12 @@ function SideNavItem({
 /**
  * 좌측 세로 카테고리 네비 (Figma Categories-sidecat 1:600 — 80x415)
  *
- * 항목 4개(공간·섬김·열청·최근)가 세로로 쌓인다. **앞의 셋은 카테고리 API 에서
- * 오고 마지막 하나는 화면이 갖는다** — 라벨 넷이 나란히 보이지만 성격이 다르다
+ * 카테고리 전부 + "최근"이 세로로 쌓인다. **앞쪽은 카테고리 API 에서 오고
+ * 마지막 하나는 화면이 갖는다** — 라벨이 나란히 보이지만 성격이 다르다
  * (위 SideNavCurrent 주석).
+ *
+ * 홈(HOME_CATEGORY_LIMIT)과 달리 여기서는 자르지 않는다. 이 네비의 일이 항목
+ * 사이 이동이라 빠진 항목이 있으면 갈 수가 없다.
  *
  * 카테고리를 하드코딩하지 않는다. 시드가 늘거나 표시명이 바뀌면 여기가 아니라
  * DB 가 정본이어야 한다. 자기 Route Handler 를 거치는 것도 규칙 그대로다
@@ -100,10 +103,15 @@ export default async function CategorySideNav({
       //   상쇄해 칩이 화면 끝까지 흘러가게 하면서 첫 칩의 들여쓰기는 남긴다.
       //   스크롤바는 숨긴다 — 칩 넉 줄에 가로 막대가 붙으면 높이만 먹는다.
       // lg 이상: 시안(Categories-sidecat 1:600 — 80x415) 그대로 세로 배치.
+      //   **높이를 고정하지 않는다.** 시안의 415 는 항목 4개(80×4 + 간격
+      //   31.67×3)일 때의 결과값이지 제약이 아니다. h-[415px] + justify-between
+      //   으로 두면 항목이 늘 때 같은 높이 안에 더 많은 칸을 밀어 넣어 원형
+      //   버튼이 찌그러진다. 간격(32px)을 고정하고 높이는 개수를 따라가게 한다
+      //   — 4개일 때 320+96=416 으로 시안과 같은 자리에 온다.
       className={[
         "-mx-4 flex w-full shrink-0 gap-[10px] overflow-x-auto px-4",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-        "lg:mx-0 lg:h-[415px] lg:w-[80px] lg:flex-col lg:justify-between lg:gap-0 lg:overflow-x-visible lg:px-0",
+        "lg:mx-0 lg:w-[80px] lg:flex-col lg:gap-8 lg:overflow-x-visible lg:px-0",
       ].join(" ")}
     >
       {categories.map((category) => (

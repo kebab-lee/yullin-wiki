@@ -34,5 +34,9 @@ export type {
   CommentReportReason,
   CommentReportStatus,
   CommentStatus,
+  CommentView,
+  CommentWithAuthor,
+  CreateCommentData,
+  MyCommentSummary,
   ReportPreview,
 } from "./comment";

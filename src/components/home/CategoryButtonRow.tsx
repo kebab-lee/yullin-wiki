@@ -12,6 +12,10 @@ type CategoryButtonRowProps = {
  * 카테고리 버튼 가로 배열 + 사이 구분선 (Figma 1:373, 510x110)
  *
  * Figma 기준 버튼 중심 간격 200px = 110(버튼) + 44.5 + 1(구분선) + 44.5
+ *
+ * **받은 만큼 그린다.** 몇 개를 보여줄지는 화면이 정한다 — 홈은 앞의 셋만
+ * 넘기고(HOME_CATEGORY_LIMIT) 그 근거는 이 컴포넌트가 아니라 홈 시안(1:373)에
+ * 있다. 여기에 slice 를 두면 이 줄을 재사용하는 화면이 전부 그 제한을 물려받는다.
  */
 export default function CategoryButtonRow({
   categories,

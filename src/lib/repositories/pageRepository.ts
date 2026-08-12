@@ -453,6 +453,48 @@ export async function findById(id: string): Promise<PageDetail | null> {
   return data ? toPage(data) : null;
 }
 
+/**
+ * 공개 여부를 판정하는 데 필요한 최소한의 값.
+ *
+ * PageDetail 을 쓰지 않는 이유가 전부다 — 그쪽에는 content(ProseMirror JSON)가
+ * 실려 있어서, "이 글에 댓글을 달아도 되는가" 한 줄을 묻자고 본문을 통째로
+ * 실어 나르게 된다.
+ */
+export type PageVisibility = {
+  id: string;
+  status: PageStatus;
+  deletedAt: string | null;
+};
+
+/**
+ * 공개 여부 판정용 최소 조회. 없으면 null.
+ *
+ * findById 와 마찬가지로 **여기서 status 로 거르지 않는다.** 무엇이 공개인가는
+ * service 의 규칙이고 이 함수는 재료만 올린다.
+ */
+export async function findVisibilityById(
+  id: string,
+): Promise<PageVisibility | null> {
+  const { data, error } = await getSupabase()
+    .from(TABLE)
+    .select("id, status, deleted_at")
+    .eq("id", id)
+    .maybeSingle<{ id: string; status: string; deleted_at: string | null }>();
+
+  if (error) {
+    if (error.code === PG_INVALID_TEXT_REPRESENTATION) return null;
+    throw new Error(`게시물 조회 실패: ${error.message}`);
+  }
+
+  return data
+    ? {
+        id: data.id,
+        status: data.status as PageStatus,
+        deletedAt: data.deleted_at,
+      }
+    : null;
+}
+
 // ── 생성 ──────────────────────────────────────────────────────
 // 게시물 한 건을 만드는 데 쓰기가 셋으로 쪼개진다 (tags upsert · pages insert ·
 // page_tags insert). PostgREST 에는 다중 문장 트랜잭션이 없어서 BEGIN/COMMIT 을

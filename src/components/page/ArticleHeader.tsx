@@ -8,6 +8,16 @@ type ArticleHeaderProps = {
   page: PageDetail;
   /** 목록 응답과 함께 받은 카테고리. 못 찾으면 배지를 생략한다. */
   category?: Category;
+  /**
+   * 말풍선에 그릴 댓글 수.
+   *
+   * page.commentCount 가 이미 같은 수를 들고 있는데 굳이 받는 이유는 **신선도**
+   * 다. 게시물 상세 응답은 60초 캐시(REVALIDATE.pages)를 타는 반면 댓글 목록은
+   * 매번 새로 읽으므로, 방금 단 댓글이 목록에는 보이는데 배지는 그대로인 상태가
+   * 생긴다. 값을 받은 쪽이 있으면 그 수를 쓴다 — 같은 화면의 두 곳이 다른 수를
+   * 말하지 않게.
+   */
+  commentCount?: number;
 };
 
 /**
@@ -34,7 +44,11 @@ function MetaRow({ label, value }: { label: string; value: string }) {
  * 배지 + 제목 / 태그 줄 / 우측 메타(게시일·수정일·작성자) + 댓글 수.
  * 데이터는 전부 props 다 — 컴포넌트 안에서 fetch 하지 않는다.
  */
-export default function ArticleHeader({ page, category }: ArticleHeaderProps) {
+export default function ArticleHeader({
+  page,
+  category,
+  commentCount,
+}: ArticleHeaderProps) {
   // 발행 전 게시물은 상세로 오지 않지만(service 가 404), 타입상 null 이 가능하다.
   // 그 경우 작성 시각을 대신 보여준다.
   const publishedAt = page.publishedAt ?? page.createdAt;
@@ -64,7 +78,7 @@ export default function ArticleHeader({ page, category }: ArticleHeaderProps) {
           <MetaRow label="수정일" value={formatDate(page.updatedAt)} />
           <MetaRow label="작성자" value={page.authorName ?? UNKNOWN_AUTHOR} />
         </dl>
-        <CommentBubble count={page.commentCount} />
+        <CommentBubble count={commentCount ?? page.commentCount} />
       </div>
     </header>
   );
