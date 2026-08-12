@@ -3,6 +3,7 @@ import Link from "next/link";
 import { REVALIDATE } from "@/lib/api/baseUrl";
 import { fetchApi } from "@/lib/api/serverFetch";
 import type { CategoryListBody } from "@/lib/api/types";
+import { categoryHref } from "@/lib/search/searchUrl";
 
 /**
  * 지금 보고 있는 목록.
@@ -16,14 +17,27 @@ import type { CategoryListBody } from "@/lib/api/types";
  * 검색 결과(`/search`)는 네비의 어느 칸도 아니다. 그래서 아무것도 활성화하지
  * 않는 변형을 따로 둔다 — 있지도 않은 slug 를 넘기거나 "최근"을 켜 두면
  * 사용자가 지금 최근 목록을 보고 있다고 읽는다.
+ *
+ * **다만 검색에 항목이 함께 걸릴 수 있다**(`/search?q=…&category=space`). 그때는
+ * 검색 화면이면서 동시에 그 항목 칸이 켜져 있는 상태라, `slug` 를 optional 로
+ * 단다. 없으면 예전처럼 아무 칸도 켜지지 않는다(전체 검색).
  */
 type SideNavCurrent =
   | { type: "category"; slug: string }
   | { type: "recent" }
-  | { type: "search" };
+  | { type: "search"; slug?: string };
 
 type CategorySideNavProps = {
   current: SideNavCurrent;
+
+  /**
+   * 지금 걸려 있는 검색어. 있으면 항목 칩이 **검색어를 유지한 채** 항목만 갈아
+   * 끼운다 (`/search?q=…&category=…`).
+   *
+   * 이 값이 없을 때 칩이 `/categories/[slug]` 로 가는 예전 동작 그대로인 것이
+   * 중요하다 — 목록 화면에서는 검색어라는 것이 아예 없다.
+   */
+  query?: string;
 };
 
 /** "최근" 항목. 카테고리가 아니므로 시드가 아니라 화면이 갖는다. */
@@ -90,6 +104,7 @@ function SideNavItem({
  */
 export default async function CategorySideNav({
   current,
+  query,
 }: CategorySideNavProps) {
   const { categories } = await fetchApi<CategoryListBody>(
     "/api/categories",
@@ -117,13 +132,22 @@ export default async function CategorySideNav({
       {categories.map((category) => (
         <SideNavItem
           key={category.slug}
-          href={`/categories/${category.slug}`}
+          // 검색어가 걸려 있으면 그것을 유지한 채 항목만 갈아끼운다. 경로 조립
+          // 규칙의 정본은 lib/search/searchUrl 이다.
+          href={categoryHref(category.slug, query)}
           icon={category.icon}
           label={category.name}
-          active={current.type === "category" && current.slug === category.slug}
+          active={
+            (current.type === "category" || current.type === "search") &&
+            current.slug === category.slug
+          }
         />
       ))}
 
+      {/* "최근"은 검색어를 이어받지 않는다. 최신순 컬렉션이라 유사도 순위인
+          검색과 같은 화면이 아니고, 여기에 q 를 실으면 라벨이 가리키는 것과
+          실제로 열리는 화면이 어긋난다. 검색어는 남기고 항목만 푸는 길은 결과
+          화면의 조건 해제 링크가 맡는다. */}
       <SideNavItem
         href={RECENT_ITEM.href}
         icon={RECENT_ITEM.icon}

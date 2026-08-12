@@ -176,29 +176,52 @@ export async function listPagesByCategory(
  *
  * 검색어를 여기서 trim 해서 repository 로 넘긴다. 앞뒤 공백은 트라이그램 집합을
  * 바꿔 유사도를 떨어뜨리는데, 그건 사용자가 의도한 검색어가 아니다.
+ *
+ * **항목(category)은 선택이고, 검색어와 서로를 지우지 않는다.** 없으면 전체
+ * 검색이고 있으면 그 항목 안에서의 검색이다. 없는 slug 를 빈 결과로 답하지 않고
+ * NotFoundError 로 던지는 것은 listPagesByCategory 와 같은 판단이다 — 오타 난
+ * URL 이 "그 항목에 걸리는 글이 없다"처럼 보이면 사용자가 검색어만 계속 고친다.
+ *
+ * 순서는 검색어 검증이 먼저다. DB 를 한 번 덜 때리기도 하지만, 무엇보다 두 조건이
+ * 다 틀렸을 때 사용자가 먼저 고쳐야 하는 것이 자기가 입력한 검색어이기 때문이다.
  */
 export async function searchPages(
   query: string,
   pagination: { page?: number; size?: number } = {},
+  categorySlug?: string,
 ): Promise<{
   items: PageSummary[];
   total: number;
   page: number;
   size: number;
   query: string;
+  category: string | null;
 }> {
   const keyword = query.trim();
 
   const result = validateSearchQuery(keyword);
   if (!result.valid) throw new ValidationError({ q: result.message });
 
-  const window = toPageWindow(pagination);
-  const { items, total } = await pageRepository.search(keyword, window);
+  const slug = categorySlug?.trim() || null;
 
-  // 실제로 검색한 문자열을 되돌려준다. 화면 제목("검색어" 전체 검색 결과)이
+  // 항목을 slug 로 받고 repository 에는 id 로 넘긴다. 이 조회 한 번이 "없는
+  // 항목인가"의 판정과 필터 값을 동시에 준다 — RPC 가 categories 를 다시 뒤질
+  // 이유가 없다.
+  const category = slug ? await categoryRepository.findBySlug(slug) : null;
+  if (slug && !category) throw new NotFoundError(NOT_FOUND_CATEGORY);
+
+  const window = toPageWindow(pagination);
+  const { items, total } = await pageRepository.search(
+    keyword,
+    window,
+    category?.id ?? null,
+  );
+
+  // 실제로 검색한 문자열·항목을 되돌려준다. 화면 제목("검색어" 전체 검색 결과)이
   // 요청한 원문 대신 서버가 쓴 값을 그리도록 — 둘이 어긋나면 결과와 제목이
-  // 다른 것을 가리킨다.
-  return { items, total, ...window, query: keyword };
+  // 다른 것을 가리킨다. category 를 undefined 가 아니라 null 로 답하는 것은
+  // listPagesForAdmin 의 status 와 같은 규칙이다.
+  return { items, total, ...window, query: keyword, category: category?.slug ?? null };
 }
 
 /**

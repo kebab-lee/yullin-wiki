@@ -30,7 +30,10 @@ const TABLE = "pages";
 const TAG_TABLE = "tags";
 const PAGE_TAG_TABLE = "page_tags";
 
-/** 검색 RPC (supabase/migrations/20260807000000_search_pages.sql). */
+/**
+ * 검색 RPC. 정본은 supabase/migrations/20260812100000_search_pages_category.sql
+ * 이다 (20260807000000 의 3인자 판을 드롭하고 항목 필터를 더한 4인자 판).
+ */
 const SEARCH_FUNCTION = "search_pages";
 
 /**
@@ -388,17 +391,24 @@ type PageSearchRow = {
  * 질의를 아는 이 자리에서 자른다 — 대신 plain_text 전체가 API 응답으로 새어
  * 나가지 않는다.
  *
+ * **categoryId 는 항목 필터이고 null 이 "전체"다.** 검색어와 항목은 서로를
+ * 지우지 않는 두 조건이라, 함수 본문에서도 공개 조건에 `and` 로 얹힐 뿐 정렬과
+ * 임계값은 그대로다. 여기서 slug 가 아니라 id 를 받는 이유는 "없는 항목인가"의
+ * 판정이 service 의 규칙이고, 그 판정이 이미 id 를 손에 쥐여 주기 때문이다.
+ *
  * ⚠️ **공개 조건이 여기 없다.** 함수 본문의 where 절이 publicPages 와 같은 조건
  * (`status = 'PUBLISHED' and deleted_at is null`)을 갖고 있어서 HIDDEN·DRAFT·
  * 삭제분은 애초에 결과에 오르지 않는다. 코드로 공유할 수 없는 유일한 사본이므로
- * pageFilters 를 고칠 때 20260807000000_search_pages.sql 도 함께 본다.
+ * pageFilters 를 고칠 때 20260812100000_search_pages_category.sql 도 함께 본다.
  */
 export async function search(
   query: string,
   { page, size }: Pagination,
+  categoryId: string | null,
 ): Promise<{ items: PageSummary[]; total: number }> {
   const { data, error } = await getSupabase().rpc(SEARCH_FUNCTION, {
     p_query: query,
+    p_category_id: categoryId,
     p_limit: size,
     p_offset: (page - 1) * size,
   });

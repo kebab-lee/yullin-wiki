@@ -98,18 +98,26 @@ export type PagedPageListBody = {
 };
 
 /**
- * GET /api/pages/search?q=&page=&size= — 검색 결과.
+ * GET /api/pages/search?q=&category=&page=&size= — 검색 결과.
  *
  * PagedPageListBody 를 그대로 쓰지 않고 `query` 를 더한 별도 타입이다. 검색
  * 화면의 제목이 "검색어"를 그려야 하는데, 그 값은 URL 이 아니라 **서버가 실제로
  * 검색에 쓴 문자열**이어야 한다(앞뒤 공백이 접힌다). page/size 를 되돌려주는 것과
  * 같은 이유다 — 요청값이 아니라 적용값이 화면의 정본이다.
  *
+ * `category` 도 같은 규칙의 **적용값**이다(slug, 없으면 null). 화면이 "'기도실'
+ * 검색 결과 · 공간" 을 그리고 각 조건의 해제 링크를 만들려면 지금 무엇이 걸려
+ * 있는지를 서버가 확정해 줘야 한다. 없는 slug 는 여기 null 로 오는 것이 아니라
+ * 404 다 — 그래야 오타 난 URL 이 "결과 0건"으로 위장되지 않는다.
+ *
  * pages 의 excerpt 는 목록과 달리 **검색어가 보이는 자리**가 잘려 온다.
  * 타입이 같아도 내용의 규칙이 다르다는 점에서, 두 응답을 한 타입으로 합치면
  * 이 차이가 계약에서 사라진다.
  */
-export type PageSearchListBody = PagedPageListBody & { query: string };
+export type PageSearchListBody = PagedPageListBody & {
+  query: string;
+  category: string | null;
+};
 
 /** GET /api/pages/[id] — 상세. 여기서만 content(ProseMirror JSON)가 실린다. */
 export type PageDetailBody = { page: PageDetail };

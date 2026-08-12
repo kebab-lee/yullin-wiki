@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
+import { readCategoryParam, searchHref } from "@/lib/search/searchUrl";
 import { isSearchable } from "@/lib/validation/search";
 
 /**
@@ -67,15 +68,18 @@ function SearchGlyph() {
  * 브라우저가 `GET /search?q=…` 로 보내 준다 — 검색은 링크를 공유할 수 있어야 하는
  * 기능이라 URL 이 정본이고, 자바스크립트는 그 위의 편의다. onSubmit 에서
  * preventDefault 하는 것은 전체 새로고침 대신 클라이언트 라우팅을 쓰기 위함이다.
+ * **항목 조건도 hidden input 으로 폼 안에 둔다** — router.push 쪽에만 실으면
+ * JS 없이 제출됐을 때 항목만 조용히 풀린다.
  *
  * **검색어를 여기서 검증하지 않고 "보낼 수 있는가"만 묻는다**(isSearchable).
  * 규칙의 정본은 validation/search.ts 이고, 문구를 띄우는 것은 결과 화면의 몫이다 —
  * 35px 알약 안에 에러 문구를 놓을 자리가 없다.
  */
-export default function SearchInput({
+function SearchForm({
   variant,
   defaultValue = "",
-}: SearchInputProps) {
+  categorySlug,
+}: SearchInputProps & { categorySlug: string | null }) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(defaultValue);
 
@@ -85,7 +89,7 @@ export default function SearchInput({
     event.preventDefault();
     if (!isSearchable(keyword)) return;
 
-    router.push(`/search?q=${encodeURIComponent(keyword.trim())}`);
+    router.push(searchHref({ query: keyword, category: categorySlug }));
   };
 
   return (
@@ -107,6 +111,12 @@ export default function SearchInput({
         className={`min-w-0 flex-1 bg-transparent outline-none ${style.input}`}
       />
 
+      {/* 지금 보고 있는 항목을 검색에 그대로 얹는다. 이것이 없으면 항목 목록에서
+          검색하는 순간 항목이 풀려 전체 검색이 된다. */}
+      {categorySlug && (
+        <input type="hidden" name="category" value={categorySlug} />
+      )}
+
       <button
         type="submit"
         aria-label="검색"
@@ -119,5 +129,50 @@ export default function SearchInput({
         )}
       </button>
     </form>
+  );
+}
+
+/** `/categories/space` 에서 slug 를 뽑는다. 그 외 경로에서는 null. */
+function categorySlugFromPathname(pathname: string): string | null {
+  const matched = /^\/categories\/([^/]+)/.exec(pathname);
+  return matched ? decodeURIComponent(matched[1]) : null;
+}
+
+/**
+ * 지금 걸려 있는 항목을 URL 에서 읽어 폼에 얹는다.
+ *
+ * **props 로 내려받을 수 없어서 URL 을 직접 읽는다.** 이 입력은 헤더 안에 있고
+ * (`SiteHeader` → `PublicHeaderView`/`AdminHeaderView`), Next 의 layout 은
+ * searchParams 를 받지 못한다 — 서버에서 내려줄 방법이 아예 없다. 클라이언트
+ * 상태로 드는 것도 아니다. 정본은 여전히 URL 이고 여기서는 읽기만 한다.
+ *
+ * 두 자리를 함께 보는 이유는 조건이 경로와 쿼리 양쪽에 살기 때문이다:
+ *   `/categories/space`            항목 목록 — 경로가 조건이다
+ *   `/search?q=…&category=space`   항목 내 검색 — 쿼리가 조건이다
+ */
+function CategoryAwareSearchForm(props: SearchInputProps) {
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  const categorySlug =
+    categorySlugFromPathname(pathname) ?? readCategoryParam(params.get("category"));
+
+  return <SearchForm {...props} categorySlug={categorySlug} />;
+}
+
+/**
+ * useSearchParams 는 정적 프리렌더를 중단시키므로 Suspense 경계가 위에 있어야
+ * 한다. 경계를 호출부(헤더 두 곳 + 홈 히어로)마다 두면 세 곳이 각자 fallback 을
+ * 갖게 되고 한 곳만 빠뜨리면 그 페이지의 빌드가 깨진다 — 경계를 컴포넌트가
+ * 스스로 갖는다.
+ *
+ * fallback 이 **항목 없는 같은 폼**인 것이 중요하다. 모양이 완전히 같아서 깜빡임이
+ * 없고, 최악의 경우에도 동작이 "전체 검색으로 나간다"까지만 후퇴한다.
+ */
+export default function SearchInput(props: SearchInputProps) {
+  return (
+    <Suspense fallback={<SearchForm {...props} categorySlug={null} />}>
+      <CategoryAwareSearchForm {...props} />
+    </Suspense>
   );
 }

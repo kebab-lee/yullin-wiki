@@ -1,10 +1,23 @@
+import Link from "next/link";
+
 import Pagination from "@/components/common/Pagination";
 import SearchResultItem from "@/components/search/SearchResultItem";
+import { categoryHref, searchHref } from "@/lib/search/searchUrl";
 import type { Category, PageSummary } from "@/lib/types";
 
 type SearchResultListProps = {
   /** 서버가 실제로 검색에 쓴 문자열. 제목과 강조가 같은 값을 본다. */
   query: string;
+
+  /**
+   * 함께 걸린 항목. 없으면 전체 검색이다.
+   *
+   * **`categories` 에서 찾아 쓰지 않고 따로 받는다.** 저쪽은 결과 줄의 배지를
+   * 그리려고 통째로 받은 목록이고, 이 값은 "지금 무엇으로 좁혀져 있는가" 라는
+   * 다른 사실이다. 하나로 합치면 결과가 0건이라 배지를 그릴 줄이 하나도 없을 때
+   * 필터 표시도 함께 사라진다 — 정작 그때가 필터가 보여야 하는 순간이다.
+   */
+  category?: Category;
 
   pages: PageSummary[];
   /** 검색어에 걸린 전체 건수. 마지막 페이지 계산에 쓴다. */
@@ -27,14 +40,56 @@ type SearchResultListProps = {
 };
 
 /**
+ * 조건 하나를 떼는 칩 (`검색어 "기도실" ✕`).
+ *
+ * **버튼이 아니라 Link 다.** 조건의 정본이 URL 이므로 해제도 "조건이 하나 빠진
+ * URL 로 이동" 이고, 그래야 뒤로가기로 되돌릴 수 있고 클릭 결과를 미리 볼 수도
+ * 있다(상태바에 목적지가 뜬다). onClick 으로 router.push 를 부르면 그 둘이 다
+ * 사라진다.
+ *
+ * ✕ 는 44px 터치 타깃 안에 들어 있다. 칩 전체가 링크라 실제 타깃은 그보다 넓다.
+ */
+function FilterChip({
+  label,
+  value,
+  href,
+  removeLabel,
+}: {
+  label: string;
+  value: string;
+  href: string;
+  removeLabel: string;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={removeLabel}
+      className="flex h-11 min-w-0 items-center gap-[8px] rounded-pill border-2 border-category-green bg-white px-[14px] text-[14px] leading-[17px] text-black transition-colors hover:border-brand-red hover:text-brand-red lg:h-[32px]"
+    >
+      <span className="shrink-0 text-gray3">{label}</span>
+      <span className="min-w-0 truncate font-bold">{value}</span>
+      <span className="shrink-0 text-[16px] leading-none" aria-hidden>
+        ✕
+      </span>
+    </Link>
+  );
+}
+
+/**
  * 검색 결과 본문 (Figma 검색 결과 Frame 1487 / 1:943 — 1006폭, 결과 목록 880폭)
  *
  * PageList 와 나란한 자리에 있지만 합치지 않는다. 헤더가 검색어를 따옴표로
  * 감싸 그리고, 줄이 88px 고정이며, 빈 상태 문구가 다르다 — 목록과 공유하는 것은
  * Pagination 과 (페이지 쪽에서) CategorySideNav 다.
+ *
+ * **두 조건이 함께 걸릴 수 있다**(검색어 + 항목). 그때는 제목이 둘을 함께
+ * 읽어 주고("기도실" 공간 항목 검색 결과), 그 아래 칩으로 각 조건을 따로 뗄 수
+ * 있다. 조건이 검색어 하나뿐이면 칩 줄을 그리지 않는다 — 뗄 것이 하나뿐인데
+ * 그것을 떼면 결과 화면 자체가 사라지므로 제목만으로 충분하다.
  */
 export default function SearchResultList({
   query,
+  category,
   pages,
   total,
   categories,
@@ -60,13 +115,45 @@ export default function SearchResultList({
               보여준다 — 없으면 "열린교회 전체 검색 결과"가 한 문장으로 읽힌다. */}
           {`"${query}"`}
         </h1>
-        <span className="whitespace-nowrap text-[20px] leading-[26px] text-gray4">
-          전체 검색 결과
-        </span>
+        {/* 항목이 걸려 있으면 제목이 두 조건을 함께 읽는다. 문구를 갈아끼우는
+            것이지 덧붙이는 것이 아니다 — "전체 검색 결과 · 공간" 은 전체를
+            뒤졌다는 말과 한 항목만 봤다는 말이 한 줄에 같이 있게 된다. */}
+        {category ? (
+          <span className="flex min-w-0 items-center gap-[6px] whitespace-nowrap text-[20px] leading-[26px] text-gray4">
+            <span aria-hidden>{category.icon}</span>
+            <span className="font-bold text-black">{category.name}</span>
+            항목 검색 결과
+          </span>
+        ) : (
+          <span className="whitespace-nowrap text-[20px] leading-[26px] text-gray4">
+            전체 검색 결과
+          </span>
+        )}
         <span className="whitespace-nowrap text-[16px] leading-[22px] text-gray3">
           {total}개
         </span>
       </header>
+
+      {/* 조건 해제 — 두 조건이 함께 걸렸을 때만 나온다.
+          · 검색어를 떼면 그 항목의 목록(`/categories/[slug]`)으로 간다.
+          · 항목을 떼면 같은 검색어의 전체 검색으로 간다.
+          경로 조립은 사이드 네비·검색 입력과 같은 규칙을 쓴다(searchUrl). */}
+      {category && (
+        <div className="mt-[16px] flex flex-wrap items-center gap-[8px]">
+          <FilterChip
+            label="검색어"
+            value={query}
+            href={categoryHref(category.slug)}
+            removeLabel={`검색어 "${query}" 조건 해제`}
+          />
+          <FilterChip
+            label="항목"
+            value={category.name}
+            href={searchHref({ query })}
+            removeLabel={`${category.name} 항목 조건 해제`}
+          />
+        </div>
+      )}
 
       {pages.length === 0 ? (
         // 시안에 0건 화면이 없어 문구를 정했다. "없다"로 끝내지 않고 다음
@@ -79,6 +166,24 @@ export default function SearchResultList({
           <p className="mt-[10px] text-[16px] leading-[22px] text-gray3">
             단어의 철자가 정확한지 확인하거나, 더 짧은 검색어로 찾아보세요.
           </p>
+
+          {/* **항목이 걸려 있을 때만 안내를 하나 더 준다.** 조건이 둘이면 0건의
+              뜻이 갈린다 — 그런 글이 없는 것인지, 항목을 잘못 고른 것인지.
+              사용자는 그 둘을 구분할 수 없고, 구분하는 유일한 방법이 항목을 떼고
+              같은 검색어를 다시 던지는 것이다.
+
+              **다른 항목들을 나열하지는 않는다.** 어느 항목에 몇 건이 있는지는
+              항목 수만큼 검색을 더 돌려야 알 수 있는데, 그걸 모른 채 이름만
+              늘어놓으면 눌러도 또 0건인 링크가 대부분이다. 항목 사이 이동은
+              이미 좌측 네비가 검색어를 유지한 채 맡고 있다. */}
+          {category && (
+            <Link
+              href={searchHref({ query })}
+              className="mt-[20px] inline-flex h-11 items-center rounded-pill border-2 border-category-green bg-white px-[18px] text-[15px] font-bold leading-[18px] text-black transition-colors hover:border-category-green2 hover:bg-category-green2 hover:text-white"
+            >
+              전체 항목에서 다시 찾아보기
+            </Link>
+          )}
         </div>
       ) : (
         // Figma: 항목 88px · 간격 35px

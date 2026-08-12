@@ -1,4 +1,9 @@
-// GET /api/pages/search?q=&page=&size= — 게시물 검색
+// GET /api/pages/search?q=&category=&page=&size= — 게시물 검색
+//
+// `category` 는 선택이다. 없으면 전체 검색이고, 있으면 그 항목 안에서의 검색이다.
+// 검색어와 항목은 서로를 지우지 않는 두 조건이라 한쪽만 있어도 성립한다
+// (항목만 있는 목록은 이 라우트가 아니라 `GET /api/pages?category=` 다 —
+// 그쪽은 유사도 순위가 아니라 최신순 컬렉션이다).
 //
 // **목록(GET /api/pages)에 `q` 를 얹지 않고 라우트를 따로 둔다.** 두 응답은
 // 모양만 비슷하고 의미가 다르다 — 목록은 최신순으로 자른 컬렉션이고, 검색은
@@ -35,10 +40,16 @@ export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
 
-    const result = await pageService.searchPages(params.get("q") ?? "", {
-      page: readNumber(params, "page"),
-      size: readNumber(params, "size"),
-    });
+    const result = await pageService.searchPages(
+      params.get("q") ?? "",
+      {
+        page: readNumber(params, "page"),
+        size: readNumber(params, "size"),
+      },
+      // 빈 문자열(`?category=`)도 "없음"으로 넘긴다. 비었는지 판정하는 규칙은
+      // service 가 갖고 있으므로 여기서는 문자열을 그대로 옮기기만 한다.
+      params.get("category") ?? undefined,
+    );
 
     return NextResponse.json<PageSearchListBody>({
       pages: result.items,
@@ -46,6 +57,7 @@ export async function GET(request: Request) {
       page: result.page,
       size: result.size,
       query: result.query,
+      category: result.category,
     });
   } catch (error) {
     return handleError(error);
