@@ -25,6 +25,7 @@ import type {
   Role,
   User,
   UserStatus,
+  ViewerRole,
 } from "@/lib/types";
 
 /** 실패 응답 바디. 4xx/5xx 는 전부 이 모양이다. */
@@ -157,6 +158,20 @@ export type MyCommentListBody = { comments: MyCommentSummary[] };
 
 /** GET /api/auth/me — 현재 로그인한 사용자. */
 export type CurrentUserBody = { user: User };
+
+/**
+ * GET /api/auth/session — 헤더가 로그인 상태를 그리기 위해 묻는 최소 응답.
+ *
+ * **`CurrentUserBody` 와 합치지 않는다.** 저쪽은 "내가 누구인가"라 이름·연락처
+ * 같은 PII 가 실리고 DB 를 다시 조회한다. 이쪽이 답하는 질문은 "지금 화면을
+ * 어떤 모양으로 그릴까" 하나뿐이라 role 한 칸이면 끝이고, 그래서 JWT payload
+ * 만 읽고 DB 를 건드리지 않는다. 헤더는 **모든 페이지 로드마다** 이걸 부르므로
+ * 그 차이가 그대로 페이지뷰당 쿼리 하나다.
+ *
+ * `Role` 이 아니라 `ViewerRole` 이다 — 비로그인이 401 이 아니라 200 +
+ * `{ role: "GUEST" }` 로 오기 때문이다 (그 근거는 라우트 주석).
+ */
+export type ViewerSessionBody = { role: ViewerRole };
 
 /**
  * GET · PATCH /api/users/me — 마이페이지의 내 회원정보.

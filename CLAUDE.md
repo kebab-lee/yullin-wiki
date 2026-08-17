@@ -78,7 +78,7 @@ docs/                       설계 문서
 - 세션이 필요한 조각은 둘뿐이다: `HeaderBrand`(로고 목적지 · "관리자" 라벨)와
   `ViewerAuthActions`(프로필 링크 · 로그인/로그아웃). 둘 다 `"use client"` 이고
   `src/lib/auth/viewerRoleClient.ts` 의 같은 스토어를 구독한다 —
-  `/api/auth/me` 요청은 탭당 한 번이다.
+  `/api/auth/session` 요청은 탭당 한 번이다.
 - **이건 표시용이다. 권한이 아니다.** 클라이언트가 role 을 위조해도 화면 접근은
   `requireRole` / `requireAuth` 가, 데이터는 service 의 `assertRole` /
   `assertAuthenticated` 가 막는다. 헤더는 애초에 아무것도 막은 적이 없다.

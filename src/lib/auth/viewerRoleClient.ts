@@ -21,7 +21,7 @@
 // localStorage 에 넣지 않는다. 세션의 정본은 httpOnly 쿠키이고, 사본을 디스크에
 // 두면 로그아웃·차단·만료된 뒤에도 남아서 서버가 아는 상태와 갈린다.
 // 여기 캐시는 **탭이 살아 있는 동안만**인 모듈 변수라, 새로고침하면 사라지고
-// 다시 /api/auth/me 에 묻는다.
+// 다시 /api/auth/session 에 묻는다.
 // =============================================================
 
 import { useSyncExternalStore } from "react";
@@ -61,8 +61,8 @@ function setState(next: ViewerRoleState): void {
  * (AuthActionButton).
  *
  * 이게 없으면 로그인 직후에도 헤더가 캐시된 GUEST 를 그대로 들고 있다.
- * 굳이 /api/auth/me 를 다시 부르지 않는 것은, 방금 그 요청의 응답으로 role 을
- * 이미 받았기 때문이다(왕복 하나를 아낀다).
+ * 굳이 /api/auth/session 을 다시 부르지 않는 것은, 방금 그 요청의 응답으로
+ * role 을 이미 받았기 때문이다(왕복 하나를 아낀다).
  */
 export function setViewerRole(role: ViewerRole): void {
   inFlight = null;
@@ -70,21 +70,29 @@ export function setViewerRole(role: ViewerRole): void {
 }
 
 /**
- * 실패하면 GUEST 로 접는다. 401(비로그인)과 네트워크 장애를 구분해서 화면에
- * 알리지 않는 이유는, 헤더가 할 수 있는 일이 어느 쪽이든 "로그인 버튼을
- * 그린다" 하나뿐이기 때문이다. 진짜 판정은 서버가 다시 한다.
+ * **`/api/auth/me` 가 아니라 `/api/auth/session` 이다.** 저쪽은 User 전체를
+ * 싣고 세션의 userId 로 DB 를 다시 조회하는데, 헤더에 필요한 것은 role 한
+ * 칸뿐이다. 헤더는 모든 페이지 로드마다 이 함수를 부르므로 그 차이가 그대로
+ * 페이지뷰당 DB 쿼리 하나이고, 쓰지도 않는 PII 가 네트워크를 오간다.
+ * /api/auth/me 는 마이페이지처럼 사람을 보여주는 화면이 계속 쓴다.
+ *
+ * 실패하면 GUEST 로 접는다. 네트워크 장애와 비로그인을 구분해서 화면에 알리지
+ * 않는 이유는, 헤더가 할 수 있는 일이 어느 쪽이든 "로그인 버튼을 그린다"
+ * 하나뿐이기 때문이다. 진짜 판정은 서버가 다시 한다.
  */
 async function fetchViewerRole(): Promise<ViewerRole> {
   try {
     // no-store 다. 응답이 사용자마다 다르고, 로그인·로그아웃 직후에 낡은 값이
     // 돌아오면 헤더가 서버가 아는 상태와 갈린다.
-    const response = await fetch("/api/auth/me", { cache: "no-store" });
+    const response = await fetch("/api/auth/session", { cache: "no-store" });
     if (!response.ok) return "GUEST";
 
     const body: unknown = await response.json();
-    const role = (body as { user?: { role?: unknown } })?.user?.role;
+    const role = (body as { role?: unknown })?.role;
 
-    // 서버 응답이라도 모양까지 믿지 않는다 (session.ts 의 verifySession 과 같은 규칙).
+    // 서버 응답이라도 모양까지 믿지 않는다 (session.ts 의 verifySession 과 같은
+    // 규칙). "GUEST" 는 Role 이 아니므로 isRole 을 통과하지 않고, 여기서
+    // 기본값으로 접히는 것이 정상 경로다.
     return isRole(role) ? role : "GUEST";
   } catch {
     return "GUEST";
