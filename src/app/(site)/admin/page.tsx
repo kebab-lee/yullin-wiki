@@ -364,28 +364,12 @@ export default async function AdminPage() {
             }
           />
 
-          <QuickAction
-            href="/admin/saved"
-            gap="10"
-            lines={["임시저장", "게시물"]}
-            icon={
-              <svg
-                width="16"
-                height="18"
-                viewBox="0 0 16 18"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="text-brand-red"
-              >
-                <path
-                  d="M2 1h12v15l-6-3.5L2 16V1z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            }
-          />
+          {/* **"임시저장 게시물" 버튼을 두지 않는다.** `/admin/saved` 라우트가
+              없어서 누르면 404 인데, Next 가 뷰포트에 들어온 Link 를 미리
+              당겨오기 때문에 **누르지 않아도** `saved?_rsc=…` 요청이 나가
+              대시보드를 열 때마다 404 가 찍혔다. 초안 목록(Figma AdSaved
+              1:2002)은 만들 가치가 있지만 그건 별도 슬라이스이고, 그때까지
+              깨진 링크를 남겨 두지 않는다. 화면을 만들면 이 자리에 되돌린다. */}
 
           <QuickAction
             href="/"

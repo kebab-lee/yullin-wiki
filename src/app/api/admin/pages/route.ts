@@ -18,6 +18,7 @@
 // 공개 조회와 어드민 쓰기는 접근 주체가 다르고, 그 경계가 URL 에 드러나야
 // 나중에 Java 쪽에서 필터 체인을 경로 단위로 나눌 수 있다.
 
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { handleError } from "@/lib/api/handleError";
@@ -75,6 +76,16 @@ export async function POST(request: Request) {
     // 라우트에서 캐스팅하면 검증 이전에 거짓말이 한 번 들어간다.
     const body: unknown = await request.json().catch(() => null);
     const page = await pageService.createPage(session, body);
+
+    // 새 글이 PUBLISHED 로 만들어졌으면 그 즉시 홈의 최근 목록·항목별 목록·
+    // 검색에 나타나야 한다. 형제 라우트(PATCH·DELETE, /status)와 같은 이유로
+    // 루트 layout 단위로 한 번에 턴다.
+    //
+    // **DRAFT 일 때는 털지 않는다.** 초안은 공개 화면 어디에도 실리지 않으므로
+    // 털어 봐야 바뀌는 화면이 없고, 에디터의 임시저장은 글 하나를 쓰는 동안
+    // 여러 번 POST 된다 — 그때마다 사이트 전체 캐시를 버리면 이 라우트가
+    // 캐시를 무의미하게 만드는 쪽이 된다.
+    if (page.status === "PUBLISHED") revalidatePath("/", "layout");
 
     return NextResponse.json<PageCreatedBody>({ id: page.id }, { status: 201 });
   } catch (error) {

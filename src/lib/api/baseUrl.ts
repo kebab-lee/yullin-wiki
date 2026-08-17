@@ -38,9 +38,20 @@ export function apiUrl(path: string): string {
  * Next fetch 캐시 수명(초).
  *
  *   categories  시드로 고정된 값이라 거의 안 바뀐다. 길게 잡는다.
- *   pages       발행하면 곧 보여야 한다. 짧게 잡는다.
+ *   pages       목록·상세의 공개 조회.
+ *
+ * **pages 의 수명이 "발행이 보이기까지의 지연"이 아니다.** 게시물을 만들거나
+ * 고치거나 상태를 바꾸는 네 경로(POST /api/admin/pages · PATCH·DELETE
+ * /api/admin/pages/[id] · PATCH .../status)가 전부 `revalidatePath("/", "layout")`
+ * 으로 캐시를 턴다. 편집 직후 반영은 이 값과 무관하게 즉시다.
+ *
+ * 그래서 이 값이 정하는 것은 **아무도 아무것도 고치지 않았을 때 함수를 얼마나
+ * 자주 깨우는가**뿐이다. 60초는 그 상황에서 시간당 60번을 헛되이 깨웠다.
+ * 300 으로 늘리면 캐시 히트가 늘어 서버리스 함수가 아예 안 뜨고, 잃는 것은
+ * revalidate 를 빠뜨린 경로가 생겼을 때의 안전망 폭뿐이다 — 그 경로를 만들지
+ * 않는 것이 옳은 방어이지 수명을 짧게 두는 것이 방어가 아니다.
  */
 export const REVALIDATE = {
   categories: 3600,
-  pages: 60,
+  pages: 300,
 } as const;
