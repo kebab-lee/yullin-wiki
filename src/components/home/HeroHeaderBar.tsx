@@ -1,7 +1,4 @@
-import Link from "next/link";
-
-import AuthActionButton from "@/components/common/AuthActionButton";
-import type { ViewerRole } from "@/lib/types";
+import ViewerAuthActions from "@/components/common/ViewerAuthActions";
 
 /**
  * 홈 히어로 안의 헤더바 — Figma Home(1:318) > Frame 1304 (x=316 y=79, 880x50).
@@ -15,10 +12,13 @@ import type { ViewerRole } from "@/lib/types";
  * 시안 좌표를 직접 들고 있었는데, 그러면 폭이 줄어도 값이 그대로라 좁은 화면에서
  * 히어로 밖으로 삐져나간다. 지금은 흐름 위의 한 줄이고 상단 여백(79px)과 좌우
  * 인셋(40px → 내부 폭 800)은 히어로 컨테이너(src/app/page.tsx)가 준다.
+ *
+ * **role 을 받지 않는다.** 예전에는 홈 페이지가 getViewerRole() 로 읽어 넘겼는데,
+ * 그 쿠키 읽기 하나가 홈 전체를 동적 렌더로 만든다. 로그인 표시는 헤더와
+ * **같은 클라이언트 조각**(ViewerAuthActions)이 브라우저에서 정한다 — 두 벌로
+ * 두면 홈과 나머지 페이지의 로그인 표시 규칙이 갈린다.
  */
-export default function HeroHeaderBar({ role }: { role: ViewerRole }) {
-  const isLoggedIn = role !== "GUEST";
-
+export default function HeroHeaderBar() {
   return (
     <div className="flex w-full flex-col gap-[15px]">
       {/* Figma Frame 1303 — 800x35 */}
@@ -27,25 +27,10 @@ export default function HeroHeaderBar({ role }: { role: ViewerRole }) {
           예배의 감격이 있는 열린교회
         </p>
 
-        {/* Figma Frame 1349 — 아이콘 30px + 10px + 버튼 */}
-        <div className="flex h-[35px] items-center gap-[10px]">
-          <Link
-            href={isLoggedIn ? "/mypage" : "/login"}
-            aria-label={isLoggedIn ? "마이페이지" : "로그인"}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full border border-white lg:size-[30px]"
-          >
-            <svg width="14" height="18" viewBox="0 0 14 18" fill="none" aria-hidden>
-              <circle cx="7" cy="5" r="4" stroke="currentColor" strokeWidth="1.5" />
-              <path
-                d="M1 17C1 13.6863 3.68629 11 7 11C10.3137 11 13 13.6863 13 17"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              />
-            </svg>
-          </Link>
-
-          <AuthActionButton role={role} variant="onBrand" />
-        </div>
+        {/* Figma Frame 1349 — 아이콘 30px + 10px + 버튼.
+            묶음의 배치(높이·간격·오른쪽 정렬)는 ViewerAuthActions 가 갖는다 —
+            로딩 중 자리잡기가 그 안에 있어서 여기서 다시 정하면 어긋난다. */}
+        <ViewerAuthActions variant="onBrand" />
       </div>
 
       {/* Figma Line 1 — y=50, 폭 800 (좌우 40px 인셋 안쪽) */}

@@ -55,14 +55,43 @@ docs/                       설계 문서
 ## 레이아웃
 
 - **헤더는 페이지에서 직접 렌더링하지 않는다.** `src/app/(site)/layout.tsx`가 담당한다.
-  `usePathname`으로 분기하거나 `SiteHeader`를 클라이언트 컴포넌트로 만들지 않는다.
+  `usePathname`으로 분기하지 않는다.
 - **홈(`/`)은 예외다.** Figma 시안(Home 1:318)에 `Header`(1:433) 인스턴스가 없고
   히어로 안의 `HeroHeaderBar`(Frame 1304)가 그 역할을 겸한다.
   그래서 홈은 `(site)` 그룹 밖(`src/app/page.tsx`)에 둔다.
   홈 전용 헤더를 `SiteHeader` 안에 조건분기로 넣지 않는다 — route group으로 가른다.
 - **푸터는 전 페이지 공통**이므로 루트 `layout.tsx`에 둔다.
 - 로그인/로그아웃 버튼처럼 헤더와 히어로가 공유하는 조각은
-  `src/components/common/`에 두고 양쪽이 같은 컴포넌트를 쓴다 (`AuthActionButton`).
+  `src/components/common/`에 두고 양쪽이 같은 컴포넌트를 쓴다
+  (`ViewerAuthActions` → `AuthActionButton`).
+
+### 헤더의 로그인 상태는 서버가 아니라 브라우저가 정한다
+
+- **`SiteHeader` 셸은 한 벌이고 서버 컴포넌트다.** 예전의
+  `PublicHeaderView` / `AdminHeaderView` 두 벌은 하나로 합쳤다 — 둘의 차이가
+  전부 세션에 달린 값이었고, 그것들이 클라이언트 조각으로 내려가자 남은 것이
+  4~5px뿐이었다. 공개 시안(1:433)의 값(lg 높이 131 · 로고↔검색 간격 20)이 정본이다.
+- **레이아웃도 페이지도 세션을 읽지 않는다.** `(site)/layout.tsx` 와
+  `src/app/page.tsx` 에서 `getViewerRole()` 을 부르지 않는다. 쿠키를 읽는 순간
+  그 아래 전부가 동적 렌더가 되고, 정적으로 생성하면 role 이 빌드 시점 값으로
+  굳어 모든 사용자가 같은 헤더를 본다.
+- 세션이 필요한 조각은 둘뿐이다: `HeaderBrand`(로고 목적지 · "관리자" 라벨)와
+  `ViewerAuthActions`(프로필 링크 · 로그인/로그아웃). 둘 다 `"use client"` 이고
+  `src/lib/auth/viewerRoleClient.ts` 의 같은 스토어를 구독한다 —
+  `/api/auth/me` 요청은 탭당 한 번이다.
+- **이건 표시용이다. 권한이 아니다.** 클라이언트가 role 을 위조해도 화면 접근은
+  `requireRole` / `requireAuth` 가, 데이터는 service 의 `assertRole` /
+  `assertAuthenticated` 가 막는다. 헤더는 애초에 아무것도 막은 적이 없다.
+- **세션을 `localStorage` 에 저장하지 않는다.** 정본은 httpOnly 쿠키이고,
+  사본을 디스크에 두면 로그아웃·차단·만료 뒤에도 남아 서버와 갈린다.
+  캐시는 탭이 살아 있는 동안만 유지되는 모듈 변수다.
+- 로그인·로그아웃처럼 **답을 이미 아는 쪽은 `setViewerRole()` 로 알려준다.**
+  빠뜨리면 헤더가 낡은 상태로 남는다 (`LoginForm` / `AuthActionButton`).
+- 세션 의존 조각을 새로 만들 때는 **로딩 중 자리를 미리 잡는다.**
+  `ViewerAuthActions` 는 가장 넓은 상태(로그인 모양)를 `invisible` 로 깔고
+  `justify-end` + `ml-auto` 로 오른쪽 끝을 고정한다 — 그래서 상태가 정해질 때
+  헤더 높이도 로고·검색창 위치도 움직이지 않는다. `opacity-0` 을 쓰지 마라
+  (안 보이는 로그아웃 버튼이 눌린다).
 
 ## 반응형 / 모바일 규칙
 
@@ -87,9 +116,11 @@ docs/                       설계 문서
   고정 크기 로고·아이콘에는 효과가 없으므로 붙이지 않는다.
 - 모바일 전용 컴포넌트를 새로 만들지 않는다.
   role 분기 안에서 CSS로 처리한다 (role × device 조합 폭발 방지).
-- **헤더는 `PublicHeaderView` / `AdminHeaderView` 두 벌이지만 둘 다 공개 화면의
-  일부다.** `AdminHeaderView` 는 EDITOR 이상이 공개 위키를 볼 때도 붙으므로
-  (`SiteHeader` 분기), 헤더 반응형 수정은 항상 두 파일에 같이 적용한다.
+- **헤더 셸은 `SiteHeader` 한 벌이므로 반응형 수정도 한 곳이다.** 예전에는
+  `PublicHeaderView` / `AdminHeaderView` 두 파일에 같은 수정을 나란히 넣어야
+  했는데, 셸을 합치면서 그 위험이 사라졌다 (→ `## 레이아웃`). 관리자용이라고
+  헤더를 다시 나누지 마라 — EDITOR 이상은 **공개 위키를 볼 때도** 같은 헤더를
+  쓰고, 갈리는 것은 세션 조각(`HeaderBrand` · `ViewerAuthActions`)뿐이다.
 
 ## 권한
 

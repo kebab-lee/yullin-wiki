@@ -141,8 +141,8 @@ function categorySlugFromPathname(pathname: string): string | null {
 /**
  * 지금 걸려 있는 항목을 URL 에서 읽어 폼에 얹는다.
  *
- * **props 로 내려받을 수 없어서 URL 을 직접 읽는다.** 이 입력은 헤더 안에 있고
- * (`SiteHeader` → `PublicHeaderView`/`AdminHeaderView`), Next 의 layout 은
+ * **props 로 내려받을 수 없어서 URL 을 직접 읽는다.** 이 입력은 헤더(`SiteHeader`)
+ * 안에 있고, Next 의 layout 은
  * searchParams 를 받지 못한다 — 서버에서 내려줄 방법이 아예 없다. 클라이언트
  * 상태로 드는 것도 아니다. 정본은 여전히 URL 이고 여기서는 읽기만 한다.
  *
@@ -162,7 +162,7 @@ function CategoryAwareSearchForm(props: SearchInputProps) {
 
 /**
  * useSearchParams 는 정적 프리렌더를 중단시키므로 Suspense 경계가 위에 있어야
- * 한다. 경계를 호출부(헤더 두 곳 + 홈 히어로)마다 두면 세 곳이 각자 fallback 을
+ * 한다. 경계를 호출부(헤더 + 홈 히어로)마다 두면 각자 fallback 을
  * 갖게 되고 한 곳만 빠뜨리면 그 페이지의 빌드가 깨진다 — 경계를 컴포넌트가
  * 스스로 갖는다.
  *

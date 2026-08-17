@@ -8,7 +8,6 @@ import MoreButton from "@/components/common/MoreButton";
 import { REVALIDATE } from "@/lib/api/baseUrl";
 import { fetchApi } from "@/lib/api/serverFetch";
 import type { CategoryListBody, RecentPageListBody } from "@/lib/api/types";
-import { getViewerRole } from "@/lib/auth/viewer";
 import Image from "next/image";
 
 /** Figma 1:380 기준 카드 3장. */
@@ -31,12 +30,15 @@ const HOME_CATEGORY_LIMIT = 3;
 
 export default async function HomePage() {
   // 홈은 (site) 그룹 밖이라 layout 의 헤더를 받지 않는다.
-  // HeroHeaderBar 가 헤더를 겸하므로 role 도 여기서 직접 읽는다.
+  // HeroHeaderBar 가 헤더를 겸한다.
+  //
+  // **여기서 세션을 읽지 않는다.** 예전에는 getViewerRole() 로 role 을 읽어
+  // HeroHeaderBar 에 넘겼는데, 그 쿠키 읽기 하나가 홈 전체를 동적 렌더로
+  // 만든다. 로그인 표시는 브라우저가 정한다 (ViewerAuthActions).
   //
   // 데이터는 service 를 직접 부르지 않고 자기 Route Handler 를 거친다
   // (CLAUDE.md "레이어 규칙"). 두 요청은 서로를 기다릴 이유가 없어 같이 띄운다.
-  const [role, categoryBody, recentBody] = await Promise.all([
-    getViewerRole(),
+  const [categoryBody, recentBody] = await Promise.all([
     fetchApi<CategoryListBody>("/api/categories", REVALIDATE.categories),
     fetchApi<RecentPageListBody>(
       `/api/pages?limit=${RECENT_LIMIT}`,
@@ -75,7 +77,7 @@ export default async function HomePage() {
 
           <div className="relative z-10 flex flex-col items-center px-4 pb-[50px] pt-[30px] lg:h-[732px] lg:px-10 lg:pb-0 lg:pt-[79px]">
             {/* 히어로 헤더바 — Figma Frame 1304 (x=316 y=79, 880x50) */}
-            <HeroHeaderBar role={role} />
+            <HeroHeaderBar />
 
             {/* 중앙 콘텐츠 — Figma 기준 top=199 */}
             <div className="mt-[40px] flex w-full flex-col items-center gap-[40px] lg:mt-[69px] lg:w-hero-inner lg:gap-[60px]">

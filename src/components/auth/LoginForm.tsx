@@ -7,6 +7,7 @@ import { useState } from "react";
 import TextField from "@/components/common/TextField";
 import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
 import { hasRole } from "@/lib/auth/roles";
+import { setViewerRole } from "@/lib/auth/viewerRoleClient";
 import type { User } from "@/lib/types";
 
 /**
@@ -46,8 +47,12 @@ export default function LoginForm() {
 
       const { user }: { user: User } = await response.json();
 
-      // 세션 쿠키가 생겼으니 서버 컴포넌트(헤더)가 다시 그려져야 한다.
-      // push 만 하면 클라이언트 라우터 캐시가 GUEST 헤더를 그대로 재사용한다.
+      // 헤더는 브라우저의 캐시된 role 을 보고 그린다(viewerRoleClient). 방금
+      // 받은 응답에 role 이 실려 있으므로 /api/auth/me 를 다시 묻지 않고 바로
+      // 알린다 — 빠뜨리면 로그인했는데 헤더가 GUEST 로 남는다.
+      setViewerRole(user.role);
+
+      // 서버 컴포넌트가 세션으로 그리는 것들의 라우터 캐시를 버린다.
       // 관리 화면에 들어갈 수 있으면 거기로. 기준은 페이지 가드와 같은 EDITOR 다.
       router.replace(hasRole(user.role, "EDITOR") ? "/admin" : "/");
       router.refresh();

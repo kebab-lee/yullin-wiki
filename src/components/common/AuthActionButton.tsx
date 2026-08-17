@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { setViewerRole } from "@/lib/auth/viewerRoleClient";
 import type { ViewerRole } from "@/lib/types";
 
 type AuthActionButtonProps = {
@@ -63,8 +64,16 @@ export default function AuthActionButton({
     setPending(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      // 쿠키가 사라졌으니 서버 컴포넌트(헤더)를 다시 그려야 GUEST 로 돌아간다.
+
+      // 쿠키가 사라졌다는 사실을 헤더에도 알린다. 헤더는 이제 서버가 아니라
+      // 브라우저의 캐시된 role 을 보고 그리므로(viewerRoleClient), 이걸
+      // 빠뜨리면 로그아웃했는데 로그아웃 버튼이 그대로 남는다.
+      // /api/auth/me 를 다시 묻지 않는 것은 답을 이미 알기 때문이다.
+      setViewerRole("GUEST");
+
       router.push("/");
+      // 서버 컴포넌트가 세션으로 그리는 것들(마이페이지 등)의 라우터 캐시를
+      // 버린다. 헤더는 위에서 이미 처리됐다.
       router.refresh();
     } finally {
       setPending(false);
