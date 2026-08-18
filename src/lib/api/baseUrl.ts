@@ -50,6 +50,12 @@ export function apiUrl(path: string): string {
  * 300 으로 늘리면 캐시 히트가 늘어 서버리스 함수가 아예 안 뜨고, 잃는 것은
  * revalidate 를 빠뜨린 경로가 생겼을 때의 안전망 폭뿐이다 — 그 경로를 만들지
  * 않는 것이 옳은 방어이지 수명을 짧게 두는 것이 방어가 아니다.
+ *
+ * **이 값은 페이지의 ISR 수명이기도 하다.** 정적으로 생성되는 라우트(홈,
+ * `/pages/[id]`)의 revalidate 는 그 페이지가 부른 fetch 들의 최소값으로 정해진다
+ * — 빌드 표의 `Revalidate 5m` 이 여기 적힌 `pages: 300` 이다. 그래서 이 수를
+ * 건드리면 캐시 미스 빈도만이 아니라 **정적 HTML 이 얼마나 오래 살아 있는가**도
+ * 함께 바뀐다. 편집 직후 반영이 즉시인 것은 위와 같은 이유로 그대로다.
  */
 export const REVALIDATE = {
   categories: 3600,

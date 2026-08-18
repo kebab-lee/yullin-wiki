@@ -93,6 +93,29 @@ docs/                       설계 문서
   헤더 높이도 로고·검색창 위치도 움직이지 않는다. `opacity-0` 을 쓰지 마라
   (안 보이는 로그아웃 버튼이 눌린다).
 
+### 읽기 페이지는 정적으로 생성된다
+
+- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`).** 둘 다 빌드 시점에 HTML 로
+  만들어지고 `REVALIDATE` 수명이 지나거나 `revalidatePath` 가 털면 다시 만들어진다.
+  `/pages/[id]` 는 `generateStaticParams` 로 공개 문서를 미리 만들고
+  `dynamicParams = true` 라 그 뒤에 발행된 글은 첫 요청 때 만들어진다.
+- **동적: 검색 · 항목별 목록(`/categories/[slug]`) · 전체 목록(`/pages`) ·
+  어드민 · 마이페이지.** 앞의 셋은 `searchParams`(`?q=` · `?page=`) 때문이고
+  뒤의 둘은 세션 때문이다. **`searchParams` 를 읽는 페이지는 정적이 될 수 없다** —
+  `generateStaticParams` 를 붙이면 빌드 표에 `●` 로 찍히지만 HTML 은 생기지 않는다
+  (그 측정 기록은 `categories/[slug]/page.tsx` 주석에 있다).
+- **정적 페이지에서 `getViewerRole()`·`cookies()` 를 부르지 마라.** 부르는 순간
+  그 라우트는 동적으로 돌아간다. 세션이 필요한 조각은 헤더와 같은 방식으로
+  브라우저에서 스스로 묻는다 (`viewerRoleClient`) — 게시물 상세에서는
+  `ArticleAdminActions`(수정·삭제 버튼)와 `CommentSection`(역할)이 그렇다.
+- **사용자마다 다른 데이터도 서버에서 읽지 마라.** 댓글이 그 경우다 — 목록에
+  `isMine` 이 실려서 빌드 시점에 굳으면 남의 댓글에 삭제 버튼이 붙는다.
+  댓글은 `CommentsProvider` 가 마운트 후 한 번 읽고, 이 화면이 무언가를 바꿨을
+  때만 다시 읽는다. **폴링·웹소켓을 붙이지 않는다.**
+- **`revalidatePath("/", "layout")` 하나면 충분하다** — 정적 페이지의 HTML 과
+  그 페이지가 쓴 fetch 캐시를 함께 턴다(측정으로 확인). 경로를 잘게 나누거나
+  캐시 태그 체계를 도입하지 마라.
+
 ## 반응형 / 모바일 규칙
 
 - 공개 위키는 모바일 퍼스트로 작성한다.

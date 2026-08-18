@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import CommentForm from "@/components/comment/CommentForm";
+import { useComments } from "@/components/comment/CommentsProvider";
 import ReportCommentDialog from "@/components/comment/ReportCommentDialog";
 import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
 import { formatDate } from "@/lib/format/date";
@@ -84,7 +84,7 @@ export default function CommentItem({
   isLoggedIn,
   isReply = false,
 }: CommentItemProps) {
-  const router = useRouter();
+  const { reload } = useComments();
 
   const [replying, setReplying] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -136,7 +136,10 @@ export default function CommentItem({
         return;
       }
 
-      router.refresh();
+      // 지워진 줄만 빼는 대신 목록을 다시 읽는다 — 부모를 지우면 답글이
+      // 최상위로 올라오는 등 다른 줄의 모양까지 바뀐다 (toThreads).
+      // router.refresh() 를 쓰지 않는 이유는 CommentForm 쪽과 같다.
+      reload();
     } catch {
       setError(NETWORK_ERROR);
       setConfirmingDelete(false);

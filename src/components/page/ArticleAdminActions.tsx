@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 
+import { hasRole } from '@/lib/auth/roles'
+import { useViewerRole } from '@/lib/auth/viewerRoleClient'
+
 import DeletePageDialog from './DeletePageDialog'
 
 type ArticleAdminActionsProps = {
@@ -17,18 +20,32 @@ const BUTTON_CLASS =
 /**
  * 게시물 상세의 수정·삭제 버튼 (Figma AdContent 1:1905)
  *
- * **표시용 판정이다.** 이 컴포넌트를 그릴지 말지는 상세 페이지가 뷰어 역할로
- * 정하지만, 실제 차단은 pageService 의 assertRole 이 한다 — 버튼을 숨기는 것과
- * API 를 막는 것은 별개 방어선이고, API 는 화면을 거치지 않고 호출된다.
+ * **표시용 판정이다.** 실제 차단은 pageService 의 assertRole 이 한다 — 버튼을
+ * 숨기는 것과 API 를 막는 것은 별개 방어선이고, API 는 화면을 거치지 않고
+ * 호출된다.
  *
- * 클라이언트 컴포넌트인 이유는 삭제 팝업의 열림 상태 하나 때문이다. 상세
- * 페이지 자체는 서버 컴포넌트로 남는다.
+ * ── 역할을 prop 으로 받지 않는 이유 ──────────────────────────
+ * 예전에는 상세 페이지가 `getViewerRole()` 로 역할을 읽어 이 컴포넌트를 그릴지
+ * 말지 정했다. 그 쿠키 읽기 하나가 페이지 전체를 동적 렌더로 만들고, 정적으로
+ * 생성하면 **빌드 시점 역할로 굳어** 모든 사용자가 같은 결과를 본다. 그래서
+ * 세션은 헤더와 같은 스토어에 직접 묻는다 (viewerRoleClient — 탭당 요청 한 번).
+ *
+ * **자리를 미리 잡지 않는다.** 헤더의 세션 조각들과 다른 판단인데, 여기서
+ * 감춰야 할 것이 110px 짜리 버튼 줄이라 미리 비워 두면 **대다수인 비로그인
+ * 방문자가** 본문과 댓글 사이의 빈 구멍을 계속 보게 된다. EDITOR 이상에게만
+ * 아래가 한 번 밀리는 편이 낫다.
  */
 export default function ArticleAdminActions({
   pageId,
   title,
 }: ArticleAdminActionsProps) {
+  const { role, ready } = useViewerRole()
   const [confirming, setConfirming] = useState(false)
+
+  // GUEST 는 저장되는 role 이 아니라 화면 상태라 hasRole 에 넘기지 않는다
+  // (types/auth.ts: ROLE_LEVEL 에 GUEST 를 끼우지 않는 이유와 같다).
+  // 소유권은 보지 않는다 — EDITOR 이상이면 누가 쓴 글이든 고치고 지운다.
+  if (!ready || role === 'GUEST' || !hasRole(role, 'EDITOR')) return null
 
   return (
     <>

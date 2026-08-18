@@ -6,9 +6,23 @@ import { ApiResponseError, fetchApi } from "@/lib/api/serverFetch";
 import type { CategoryListBody, PagedPageListBody } from "@/lib/api/types";
 
 /**
- * **프리렌더 금지.** `/pages/[id]` 와 같은 이유다 — 자기 Route Handler 를 fetch
- * 하는데 params·searchParams 를 읽지 않아서 Next 가 빌드 시점에 미리 렌더하려
- * 들고, 그 시점에는 API 를 받아줄 서버가 없다.
+ * ── 이 줄에 적혀 있던 근거는 사실이 아니었다 ────────────────
+ * 예전 주석은 "빌드 시점에는 API 를 받아줄 서버가 없어 self-fetch 가 깨진다"
+ * 였다. **아니다** — 빌드는 이미 떠 있는 배포를 향해 fetch 하고(getBaseUrl:
+ * NEXT_PUBLIC_SITE_URL / VERCEL_URL), 홈과 게시물 상세가 그렇게 실제 데이터를
+ * 담은 채 프리렌더되고 있다. 같은 문장이 `/pages/[id]` 에도 있었고 거기서는
+ * 지웠다.
+ *
+ * **그래서 이 줄은 지금 근거 없이 남아 있다.** 이 화면에는 동적이어야 할 이유가
+ * 없다 — 세션도 `searchParams` 도 읽지 않고, 데이터는 캐시되는 fetch 둘
+ * (`/api/categories` · 항목마다 `/api/pages?category=…`)뿐이며 그 캐시는
+ * `revalidatePath("/", "layout")` 이 턴다. 지우면 정적이 된다는 것도 확인했다 —
+ * 이 줄만 빼고 빌드하면 `○ /categories` (Revalidate 5m)로 찍히고
+ * `.next/server/app/categories.html` 이 실제 항목·게시물을 담은 채 생성된다.
+ *
+ * 정적으로 돌리면 아래 N+1 요청(항목 수만큼)이 요청 시점이 아니라 빌드 시점에
+ * 한 번만 일어난다는 점에서 이득도 크다. **그럼에도 이번 작업의 범위가 아니라서
+ * 그대로 둔다** — 지울 때는 위 측정을 다시 확인하고 지워라.
  */
 export const dynamic = "force-dynamic";
 

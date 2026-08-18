@@ -7,6 +7,27 @@ import { ApiResponseError, fetchApi } from "@/lib/api/serverFetch";
 import type { CategoryListBody, PagedPageListBody } from "@/lib/api/types";
 
 /**
+ * ── 이 라우트는 정적 생성되지 않는다. generateStaticParams 를 넣지 마라 ──
+ *
+ * 홈·게시물 상세를 정적으로 돌리면서 여기도 같이 해 봤고, **측정 결과 안 된다.**
+ * 원인은 아래 `searchParams` 한 줄이다 — Next 는 searchParams 를 읽는 페이지를
+ * 요청 시점 렌더로 고정한다. `generateStaticParams` 를 달면 빌드 표에는
+ * `● /categories/[slug]` 로 slug 넷이 찍히지만(그래서 속기 쉽다) `.next` 에
+ * HTML 도 prerender-manifest 항목도 생기지 않고, 응답 헤더는
+ * `Cache-Control: private, no-store` 다. searchParams 를 읽지 않게 고치면 같은
+ * 빌드에서 곧바로 HTML 넷이 생기는 것으로 원인을 확인했다.
+ *
+ * **그래서 페이지네이션을 포기하지 않는다.** `?page=` 로 페이지 상태가 URL 에
+ * 드러나야 뒤로가기·공유가 유지된다는 것은 이 프로젝트가 무한 스크롤을 쓰지
+ * 않는 이유이기도 하다 (CLAUDE.md "반응형/모바일"). 정적 생성과 맞바꿀 값이
+ * 아니다.
+ *
+ * 잃는 것도 크지 않다. 목록 데이터는 여전히 fetch 캐시(REVALIDATE.pages)를
+ * 타므로 DB 까지 내려가지 않고, `revalidatePath("/", "layout")` 이 그 캐시도
+ * 함께 턴다(측정으로 확인). 함수가 한 번 깨어나는 비용만 남는다.
+ */
+
+/**
  * 항목별 게시물 목록 — `/categories/[slug]` (Figma 항목-공간 1:598)
  *
  * (site) 그룹 안이라 헤더는 layout 이 붙인다. 어드민용으로 화면을 따로 그리지
@@ -16,8 +37,8 @@ import type { CategoryListBody, PagedPageListBody } from "@/lib/api/types";
  * 목록 본문은 전체 목록(`/pages`)과 같은 PageList 다. 이 파일이 아는 것은
  * "어떤 조건의 목록인가"뿐이다.
  *
- * 데이터는 service 가 아니라 자기 Route Handler 를 거친다. searchParams 를 읽으므로
- * 이 페이지는 동적 렌더링이고, 그래서 빌드 시점에 자기 자신을 fetch 하지 않는다.
+ * 데이터는 service 가 아니라 자기 Route Handler 를 거친다. 이 페이지가 요청
+ * 시점에 렌더되는 이유는 바로 위 블록에 적어 두었다.
  */
 export default async function CategoryPage({
   params,

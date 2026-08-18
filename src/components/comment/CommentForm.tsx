@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useComments } from "@/components/comment/CommentsProvider";
 import FieldMessage from "@/components/common/FieldMessage";
 import { NETWORK_ERROR, readErrorBody } from "@/lib/api/errorBody";
 import {
@@ -48,7 +48,7 @@ export default function CommentForm({
   onSubmitted,
   onCancel,
 }: CommentFormProps) {
-  const router = useRouter();
+  const { reload } = useComments();
 
   const [content, setContent] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -90,9 +90,13 @@ export default function CommentForm({
       setIsAnonymous(false);
       onSubmitted?.();
 
-      // 목록은 서버 컴포넌트가 그린다. 응답으로 받은 한 줄을 클라이언트가
+      // 응답(201)에 방금 만들어진 댓글이 실려 오지만 그 한 줄을 목록에
       // 끼워 넣지 않고 서버에 다시 묻는다 — 목록의 정본은 서버다.
-      router.refresh();
+      //
+      // **router.refresh() 가 아니라 reload() 다.** 상세 페이지는 정적 생성이라
+      // 라우트를 새로 그려도 댓글은 브라우저가 따로 읽어 온 값이고, refresh 는
+      // 그 값을 건드리지 않는다 (CommentsProvider).
+      reload();
     } catch {
       setError(NETWORK_ERROR);
     } finally {
