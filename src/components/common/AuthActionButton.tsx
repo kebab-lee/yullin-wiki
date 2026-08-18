@@ -68,7 +68,7 @@ export default function AuthActionButton({
       // 쿠키가 사라졌다는 사실을 헤더에도 알린다. 헤더는 이제 서버가 아니라
       // 브라우저의 캐시된 role 을 보고 그리므로(viewerRoleClient), 이걸
       // 빠뜨리면 로그아웃했는데 로그아웃 버튼이 그대로 남는다.
-      // /api/auth/me 를 다시 묻지 않는 것은 답을 이미 알기 때문이다.
+      // /api/auth/session 을 다시 묻지 않는 것은 답을 이미 알기 때문이다.
       setViewerRole("GUEST");
 
       router.push("/");

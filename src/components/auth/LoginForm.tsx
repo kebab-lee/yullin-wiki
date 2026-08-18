@@ -48,7 +48,7 @@ export default function LoginForm() {
       const { user }: { user: User } = await response.json();
 
       // 헤더는 브라우저의 캐시된 role 을 보고 그린다(viewerRoleClient). 방금
-      // 받은 응답에 role 이 실려 있으므로 /api/auth/me 를 다시 묻지 않고 바로
+      // 받은 응답에 role 이 실려 있으므로 /api/auth/session 을 다시 묻지 않고 바로
       // 알린다 — 빠뜨리면 로그인했는데 헤더가 GUEST 로 남는다.
       setViewerRole(user.role);
 

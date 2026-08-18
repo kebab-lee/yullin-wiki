@@ -156,7 +156,14 @@ export type CommentCreatedBody = { comment: CommentView };
  */
 export type MyCommentListBody = { comments: MyCommentSummary[] };
 
-/** GET /api/auth/me — 현재 로그인한 사용자. */
+/**
+ * GET /api/auth/me — 현재 로그인한 사용자.
+ *
+ * **더 이상 헤더용이 아니다.** 헤더는 role 한 칸만 필요해서
+ * `/api/auth/session`(ViewerSessionBody)으로 옮겼다. 지금 이 응답을 쓰는 곳은
+ * 새 게시물 에디터 하나다 — 작성자 이름을 미리 채워 보여주려고 부른다
+ * (PageEditorForm). 저장에는 쓰지 않는다: 진짜 작성자는 서버가 세션에서 정한다.
+ */
 export type CurrentUserBody = { user: User };
 
 /**
@@ -177,9 +184,14 @@ export type ViewerSessionBody = { role: ViewerRole };
  * GET · PATCH /api/users/me — 마이페이지의 내 회원정보.
  *
  * 모양이 CurrentUserBody 와 같지만 별칭으로 합치지 않는다. 두 응답이 답하는
- * 질문이 다르다 — /api/auth/me 는 "지금 누가 로그인했는가"(헤더·가드용)이고
- * 이쪽은 "내 회원정보를 보여달라"(화면용)다. 마이페이지에 표시 항목이 늘어
- * 계약이 두꺼워질 때 인증 쪽 응답까지 끌려가면 안 된다.
+ * 질문이 다르다 — /api/auth/me 는 "지금 누가 로그인했는가"(인증 쪽 응답)이고
+ * 이쪽은 "내 회원정보를 보여달라"(화면용)다. 마이페이지 계열
+ * (`/mypage`, `/mypage/edit`, `/mypage/withdraw`, 프로필 수정 폼)이 쓰는 것은
+ * 전부 이쪽이며, 표시 항목이 늘어 계약이 두꺼워질 때 인증 쪽 응답까지 끌려가면
+ * 안 된다.
+ *
+ * 로그인 상태만 필요한 화면(헤더)은 둘 다 아닌 세 번째 응답을 쓴다
+ * (`ViewerSessionBody` — role 한 칸, DB 조회 없음).
  */
 export type MyProfileBody = { user: User };
 

@@ -74,7 +74,8 @@ export function setViewerRole(role: ViewerRole): void {
  * 싣고 세션의 userId 로 DB 를 다시 조회하는데, 헤더에 필요한 것은 role 한
  * 칸뿐이다. 헤더는 모든 페이지 로드마다 이 함수를 부르므로 그 차이가 그대로
  * 페이지뷰당 DB 쿼리 하나이고, 쓰지도 않는 PII 가 네트워크를 오간다.
- * /api/auth/me 는 마이페이지처럼 사람을 보여주는 화면이 계속 쓴다.
+ * /api/auth/me 는 새 게시물 에디터가 작성자 이름을 채우는 데 계속 쓴다
+ * (PageEditorForm). 마이페이지 계열은 원래부터 /api/users/me 쪽이다.
  *
  * 실패하면 GUEST 로 접는다. 네트워크 장애와 비로그인을 구분해서 화면에 알리지
  * 않는 이유는, 헤더가 할 수 있는 일이 어느 쪽이든 "로그인 버튼을 그린다"
