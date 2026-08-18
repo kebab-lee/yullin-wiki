@@ -95,8 +95,9 @@ docs/                       설계 문서
 
 ### 읽기 페이지는 정적으로 생성된다
 
-- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`).** 둘 다 빌드 시점에 HTML 로
-  만들어지고 `REVALIDATE` 수명이 지나거나 `revalidatePath` 가 털면 다시 만들어진다.
+- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`) · 항목 목록(`/categories`).**
+  셋 다 빌드 시점에 HTML 로 만들어지고 `REVALIDATE` 수명이 지나거나
+  `revalidatePath` 가 털면 다시 만들어진다.
   `/pages/[id]` 는 `generateStaticParams` 로 공개 문서를 미리 만들고
   `dynamicParams = true` 라 그 뒤에 발행된 글은 첫 요청 때 만들어진다.
 - **동적: 검색 · 항목별 목록(`/categories/[slug]`) · 전체 목록(`/pages`) ·

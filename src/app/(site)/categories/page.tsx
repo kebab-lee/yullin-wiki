@@ -6,27 +6,6 @@ import { ApiResponseError, fetchApi } from "@/lib/api/serverFetch";
 import type { CategoryListBody, PagedPageListBody } from "@/lib/api/types";
 
 /**
- * ── 이 줄에 적혀 있던 근거는 사실이 아니었다 ────────────────
- * 예전 주석은 "빌드 시점에는 API 를 받아줄 서버가 없어 self-fetch 가 깨진다"
- * 였다. **아니다** — 빌드는 이미 떠 있는 배포를 향해 fetch 하고(getBaseUrl:
- * NEXT_PUBLIC_SITE_URL / VERCEL_URL), 홈과 게시물 상세가 그렇게 실제 데이터를
- * 담은 채 프리렌더되고 있다. 같은 문장이 `/pages/[id]` 에도 있었고 거기서는
- * 지웠다.
- *
- * **그래서 이 줄은 지금 근거 없이 남아 있다.** 이 화면에는 동적이어야 할 이유가
- * 없다 — 세션도 `searchParams` 도 읽지 않고, 데이터는 캐시되는 fetch 둘
- * (`/api/categories` · 항목마다 `/api/pages?category=…`)뿐이며 그 캐시는
- * `revalidatePath("/", "layout")` 이 턴다. 지우면 정적이 된다는 것도 확인했다 —
- * 이 줄만 빼고 빌드하면 `○ /categories` (Revalidate 5m)로 찍히고
- * `.next/server/app/categories.html` 이 실제 항목·게시물을 담은 채 생성된다.
- *
- * 정적으로 돌리면 아래 N+1 요청(항목 수만큼)이 요청 시점이 아니라 빌드 시점에
- * 한 번만 일어난다는 점에서 이득도 크다. **그럼에도 이번 작업의 범위가 아니라서
- * 그대로 둔다** — 지울 때는 위 측정을 다시 확인하고 지워라.
- */
-export const dynamic = "force-dynamic";
-
-/**
  * 항목 줄 하나에 올릴 카드 수 — Figma Frame 1317(620px = 190×3 + 25×2).
  *
  * 홈의 RECENT_LIMIT 과 같은 3 이지만 상수를 공유하지 않는다. 근거가 다른 시안
@@ -36,6 +15,19 @@ const ROW_CARD_LIMIT = 3;
 
 /**
  * 항목별 게시물 — `/categories` (Figma 1:572)
+ *
+ * **이 페이지는 정적으로 생성된다.** `searchParams` 도 `params` 도 세션도 읽지
+ * 않고, 데이터는 캐시되는 fetch 둘(`/api/categories` · 항목마다
+ * `/api/pages?category=…`)뿐이라 빌드 시점에 HTML 로 굳힐 수 있다. 그래서
+ * 아래 N+1 요청(항목 수만큼)은 방문할 때마다가 아니라 빌드 때 한 번 일어난다.
+ * 셋 중 하나라도 읽는 순간 이 라우트는 동적으로 돌아간다 — 항목 사이 이동을
+ * `?page=` 같은 쿼리로 바꾸려 든다면 그 대가를 먼저 보라
+ * (`/categories/[slug]` 가 그 이유로 동적이다).
+ *
+ * **항목이 0건인 채로 빌드되면 아래 `notFound()` 가 그대로 굳는다.** 시드가
+ * 비어 있던 순간을 HTML 로 박아 두는 셈인데, 항목을 추가하면
+ * `POST /api/admin/categories` 의 `revalidatePath("/", "layout")` 이 이 페이지를
+ * 함께 털어 다음 요청 때 다시 만들어진다. 그래서 막지 않는다.
  *
  * 홈의 "📂 항목별로 둘러보기 → 더보기"가 오는 곳이다. **예전에는 첫 항목으로
  * 리다이렉트했다.** 항목이 셋뿐이고 홈 버튼 줄이 그 셋을 전부 그리던 때에는
