@@ -402,12 +402,62 @@ docs/                       설계 문서
    어긋나면 구조를 바로잡아 제안한다.
 3. 설계 트레이드오프가 있으면 짧게 근거를 같이 설명한다.
 
+## 로컬 개발
+
+### 로컬 프로덕션 빌드에는 살아 있는 origin 이 필요하다
+
+- `/pages/[id]` 의 `generateStaticParams` 가 **빌드 중에** `/api/pages` 를
+  self-fetch 하는데 빌드 시점에는 그 서버가 없다. 그냥 `npm run build` 하면
+  `ECONNREFUSED` 로 죽는다. `getBaseUrl()` 이 `NEXT_PUBLIC_SITE_URL` →
+  `VERCEL_URL` → `localhost:$PORT` 순으로 보기 때문이다.
+- **Vercel 빌드는 정상이다** — `NEXT_PUBLIC_SITE_URL` 이 기존 배포를 가리킨다.
+  로컬에서만 걸리는 마찰이다.
+- **⚠️ dev 서버를 띄우고 같은 디렉터리에서 빌드하면 안 된다.** 둘이 `.next` 를
+  공유하는데 `next build` 가 그걸 갈아엎어서, dev 서버가 자기 청크를 잃고
+  `Cannot find module for page: /_document` · 500 을 뱉기 시작한다. 빌드는 그걸
+  받아 "API 가 500" 이라고 죽는다 — **원인이 엉뚱한 곳으로 보이는 실패다.**
+  (`PORT=3111 npm run build` 를 같은 트리에서 돌리면 이 함정에 그대로 빠진다)
+- **그래서 빌드는 별도 트리에서 한다.** `node_modules` 는 심볼릭 링크면 충분하다.
+  아래 절차는 실제로 확인한 것이다:
+
+  ```bash
+  npx next dev -p 3111
+  ```
+
+  ```bash
+  BUILD_DIR=/tmp/yw-build
+  rsync -a --exclude .git --exclude .next --exclude node_modules ./ "$BUILD_DIR"/
+  ln -s "$PWD/node_modules" "$BUILD_DIR"/node_modules && cp .env.local "$BUILD_DIR"/
+  cd "$BUILD_DIR" && PORT=3111 npx next build
+  ```
+
+  전/후 성능 비교처럼 두 벌을 빌드할 때도 같은 방식이다 — 트리를 둘로 두고
+  API 를 대 주는 dev 서버 하나만 살려 둔다.
+- **더 짧게 만들려면** `next.config.js` 의 `distDir` 을 환경변수로 열어
+  (`distDir: process.env.NEXT_DIST_DIR ?? ".next"`) dev 서버만 다른 디렉터리를
+  쓰게 하면 된다. 그러면 트리 복사 없이 `NEXT_DIST_DIR=.next-dev npx next dev
+  -p 3111` + `PORT=3111 npm run build` 두 줄로 끝난다. **아직 적용하지 않았다** —
+  `.gitignore` 에 그 디렉터리를 더하는 것까지 함께 판단할 일이라 남겨 둔다.
+
 ## 미완료 항목
 
 - **게시물 삭제 확인 UX 가 Figma 1:1759 와 대조되지 않았다.** 현재는 "제목 입력 확인"
   방식으로만 구현돼 있고 세부 배치가 시안과 다를 수 있다.
 - **삭제 성공 알림(Figma 1:1803)이 미구현이다.**
 - Figma MCP 호출 한도(Starter plan)가 풀리면 위 두 노드를 읽어 대조·수정한다.
+- **`/admin/categories` 가 N+1 이다.** `categoryService.listCategoriesForAdmin` 이
+  항목마다 `categoryRepository.countPagesByCategoryId` 를 따로 부른다 — 목록 1회 +
+  항목 수만큼의 count 질의다. `Promise.all` 로 병렬이라 직렬은 아니지만 왕복 자체가
+  항목 수를 따라간다. 실측으로 이 화면만 100ms 대이고 다른 어드민 화면은 30ms 대다
+  (→ `## 레이어 규칙` 의 "서버 컴포넌트의 self-fetch" 측정 근거).
+  - 지금은 항목이 시드로 고정된 소수라 견딜 만하다. **항목을 사용자가 늘릴 수 있게
+    되면 그때 반드시 걸린다.**
+  - 고칠 때 `countPagesByCategoryId` 의 조건을 물려받아야 한다 — **아무것도 거르지
+    않는 수**여야 한다(`deleted_at` 도 `status` 도 보지 않는다). 그 수가 답하는
+    질문이 "화면에 몇 건 보이는가"가 아니라 "이 항목을 지울 수 있는가"이기
+    때문이다. 근거는 그 함수 주석에 있다.
+  - **DB View 나 RPC 로 옮기지 마라** (→ `## DB`). service 레이어에서 한 번에
+    묶어 세는 쪽이 Java 이관 시 그대로 옮겨진다.
 
 ## 참고 문서
 
