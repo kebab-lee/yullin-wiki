@@ -1,10 +1,45 @@
 import AdminShell from "@/components/admin/AdminShell";
 import AdminCommentList from "@/components/admin/comments/AdminCommentList";
 import Pagination from "@/components/common/Pagination";
-import { fetchApiAsUser } from "@/lib/api/serverFetch";
+import { readNumberParam } from "@/lib/api/queryParams";
 import type { AdminCommentListBody } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/requireRole";
 import { hasRole } from "@/lib/auth/roles";
+import type { SessionPayload } from "@/lib/auth/session";
+import * as commentService from "@/lib/services/commentService";
+
+/**
+ * 댓글 목록 한 페이지. **self-fetch 대신 직접 호출이 사는 자리는 여기 하나다.**
+ *
+ * 이 응답에는 익명 댓글의 실제 작성자가 실려 있어 사용자마다 다르고, 그래서
+ * 예전의 fetchApiAsUser 는 no-store 였다 — fetch 캐시가 아예 걸리지 않으니 자기
+ * 라우트로 한 바퀴 도는 비용을 매 요청 그대로 냈다는 뜻이다. 정적화도 세션 때문에
+ * 불가능하다 (CLAUDE.md "서버 컴포넌트의 self-fetch").
+ *
+ * **권한은 그대로 두 겹이다.** `requireRole("EDITOR")` 가 돌려준 세션을 그대로
+ * 넘기므로, 라우트 핸들러가 `getSession()` 으로 읽어 넘기던 값과 같다 —
+ * commentService.listCommentsForAdmin 의 `assertRole("EDITOR")` 는 이전과 똑같이
+ * 호출된다. 화면 가드가 데이터 가드를 대체하지 않는다.
+ *
+ * 반환 타입을 `AdminCommentListBody` 로 두는 것도 의도다. 라우트가 내려주던 것과
+ * 같은 모양이라 화면 코드가 예외를 눈치채지 못하고, Java 이관 시 이 함수 본문만
+ * `fetchApiAsUser` 로 되돌리면 끝난다.
+ */
+async function adminCommentList(
+  session: SessionPayload,
+  pageParam: string | undefined,
+): Promise<AdminCommentListBody> {
+  const result = await commentService.listCommentsForAdmin(session, {
+    page: readNumberParam(pageParam),
+  });
+
+  return {
+    comments: result.items,
+    total: result.total,
+    page: result.page,
+    size: result.size,
+  };
+}
 
 /**
  * 최근 달린 댓글 — `/admin/comments` (Figma 1:2184)
@@ -37,13 +72,8 @@ export default async function AdminCommentsPage({
   const session = await requireRole("EDITOR");
 
   const { page } = await searchParams;
-  const suffix = page ? `?page=${page}` : "";
 
-  // 세션 쿠키를 실어야 한다. 이 목록에는 익명 댓글의 실제 작성자가 실려 있고
-  // fetchApiAsUser 가 no-store 로 고정한다 — 캐시되면 그 값이 남에게 나간다.
-  const body = await fetchApiAsUser<AdminCommentListBody>(
-    `/api/admin/comments${suffix}`,
-  );
+  const body = await adminCommentList(session, page);
 
   // 마지막 페이지는 서버가 되돌려준 size 로 계산한다. 요청한 size 가 상한(50)
   // 에서 접혔으면 실제 쪽수가 달라진다.

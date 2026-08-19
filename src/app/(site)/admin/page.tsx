@@ -5,10 +5,13 @@ import {
   DELETED_PAGE_TITLE,
   WITHDRAWN_USER_NAME,
 } from "@/components/admin/reports/labels";
-import { fetchApiAsUser } from "@/lib/api/serverFetch";
 import type { AdminDashboardBody } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/requireRole";
+import { hasRole } from "@/lib/auth/roles";
+import type { SessionPayload } from "@/lib/auth/session";
 import { formatDate } from "@/lib/format/date";
+import * as commentService from "@/lib/services/commentService";
+import * as reportService from "@/lib/services/reportService";
 import type { CommentPreview, ReportPreview } from "@/lib/types";
 import {
   REASON_LABEL,
@@ -307,6 +310,42 @@ function DashboardSection({
   );
 }
 
+// ---- Data ----
+
+/**
+ * 대시보드 카드 두 줄. **self-fetch 대신 직접 호출이 사는 자리는 여기 하나다.**
+ *
+ * 응답이 사용자마다 다르므로(신고 섹션이 role 로 갈린다) 예전의 fetchApiAsUser 는
+ * no-store 였다 — fetch 캐시가 아예 걸리지 않으니 자기 라우트로 한 바퀴 도는
+ * 비용을 매 요청 그대로 냈다는 뜻이다. 정적화도 세션 때문에 불가능하다
+ * (CLAUDE.md "서버 컴포넌트의 self-fetch").
+ *
+ * **권한은 그대로 두 겹이다.** `requireRole("EDITOR")` 가 돌려준 세션을 그대로
+ * 넘기므로, 라우트 핸들러가 `getSession()` 으로 읽어 넘기던 값과 같다 — 두
+ * service 의 `assertRole` 은 이전과 똑같이 호출된다. 화면 가드가 데이터 가드를
+ * 대체하지 않는다.
+ *
+ * **신고는 ADMIN 일 때만 묻는다.** 라우트 핸들러가 하던 판정 그대로다 — 신고
+ * 조회는 ADMIN 전용이라(reportService) EDITOR 로 부르면 403 이 나 대시보드 전체가
+ * 실패한다. EDITOR 에게 빈 배열이 가는 것이 계약이다 (AdminDashboardBody 주석).
+ *
+ * 반환 타입을 `AdminDashboardBody` 로 두는 것도 의도다. 라우트가 내려주던 것과
+ * 같은 모양이라 화면 코드가 예외를 눈치채지 못하고, Java 이관 시 이 함수 본문만
+ * `fetchApiAsUser` 로 되돌리면 끝난다.
+ */
+async function dashboardBody(
+  session: SessionPayload,
+): Promise<AdminDashboardBody> {
+  const [comments, reports] = await Promise.all([
+    commentService.listRecentCommentsForDashboard(session),
+    hasRole(session.role, "ADMIN")
+      ? reportService.listRecentReportsForDashboard(session)
+      : Promise.resolve<ReportPreview[]>([]),
+  ]);
+
+  return { comments, reports };
+}
+
 // ---- Page ----
 
 export default async function AdminPage() {
@@ -314,11 +353,7 @@ export default async function AdminPage() {
   // 대시보드는 위키 운영 화면이므로 EDITOR 부터 들어온다 (ADMIN 은 계층상 포함).
   const session = await requireRole("EDITOR");
 
-  // 세션 쿠키를 실어야 한다. 대시보드는 사용자마다 다른 응답이고(신고 섹션이
-  // role 로 갈린다) fetchApiAsUser 가 no-store 로 고정한다 — 캐시되면 EDITOR
-  // 에게 신고 카드가, 남에게 익명 댓글의 작성자가 나갈 수 있다.
-  const { comments, reports } =
-    await fetchApiAsUser<AdminDashboardBody>("/api/admin/dashboard");
+  const { comments, reports } = await dashboardBody(session);
 
   // LNB 를 여기에도 붙인다. 관리 화면 중 한 곳에만 메뉴가 있으면 대시보드에서
   // 위키 관리로 갈 길이 주소창뿐이고, LNB 의 "대시보드" 항목도 돌아올 곳이 없는

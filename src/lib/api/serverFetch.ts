@@ -8,9 +8,11 @@
 // **서버 전용이다.** 클라이언트 컴포넌트는 상대 경로로 fetch 하면 되므로
 // 이 모듈이 필요 없다 (절대 URL 을 클라이언트 번들에 넣을 이유도 없다).
 //
-// **예외가 하나 있다: `/search` 의 검색 결과.** 그 화면만 service 를 직접 부른다
-// (사유·측정 근거는 `src/app/(site)/search/page.tsx` 상단과 CLAUDE.md "레이어 규칙").
-// 새 예외를 늘리지 마라 — 거기 적힌 수준의 측정 근거 없이는 예외가 아니다.
+// **이걸 쓰지 않는 화면이 있다: 캐시가 왕복 비용을 흡수하지 못하는 화면.**
+// `/search`(쿼리마다 URL 이 달라 캐시 미스)와 어드민 화면들(응답이 사용자마다 달라
+// no-store)이 그렇고, 그 화면들은 service 를 직접 부른다. 판정 기준과 측정 근거는
+// CLAUDE.md "서버 컴포넌트의 self-fetch" 에 있다 — **화면 이름이 아니라 그 기준을
+// 보고 판단해라.** 캐시가 흡수하는 호출은 여전히 전부 여기를 거친다.
 // =============================================================
 
 import { cookies } from "next/headers";
@@ -72,6 +74,14 @@ export async function fetchApi<T>(
  *
  * 화면 접근 차단(requireAuth)과 별개다. 이건 데이터를 가져오는 방법일 뿐이고,
  * 진짜 판정은 Route Handler 너머 service 의 assertAuthenticated 가 한다.
+ *
+ * ⚠️ **지금 이 함수는 호출자가 없다. 그래도 지우지 마라.**
+ * 기준상 그럴 수밖에 없다 — 세션 쿠키를 실어야 하는 응답은 곧 no-store 라
+ * fetch 캐시가 안 걸리는 응답이고, 그런 화면은 전부 service 를 직접 부르기
+ * 때문이다 (CLAUDE.md "서버 컴포넌트의 self-fetch"). **잊혀서 남은 코드가
+ * 아니라 되돌아갈 자리로 남긴 코드다** — 어드민·마이페이지 화면들의 데이터
+ * 함수는 Java 이관 때 본문을 이 호출로 되돌리게 되어 있고, 라우트 핸들러를
+ * 지우지 않는 것과 같은 판단이다. (`fetchApi` 쪽은 공개 화면들이 계속 쓴다.)
  */
 export async function fetchApiAsUser<T>(path: string): Promise<T> {
   const response = await fetch(apiUrl(path), {

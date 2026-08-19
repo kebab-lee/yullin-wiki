@@ -1,8 +1,10 @@
 import AdminShell from "@/components/admin/AdminShell";
 import AdminUserList from "@/components/admin/users/AdminUserList";
-import { fetchApiAsUser } from "@/lib/api/serverFetch";
+import { readNumberParam } from "@/lib/api/queryParams";
 import type { AdminUserListBody } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/requireRole";
+import type { SessionPayload } from "@/lib/auth/session";
+import * as userService from "@/lib/services/userService";
 import type { Role } from "@/lib/types";
 
 /**
@@ -19,6 +21,48 @@ const DEFAULT_ROLE: Role = "ADMIN";
 /** `?role=` 을 이 화면이 다루는 둘 중 하나로 접는다. 없거나 밖의 값이면 기본값. */
 function scopeRole(value: string | undefined): Role {
   return ROLE_OPTIONS.find((role) => role === value) ?? DEFAULT_ROLE;
+}
+
+/**
+ * 사용자 목록 한 페이지. **self-fetch 대신 직접 호출이 사는 자리는 여기 하나다.**
+ *
+ * `/admin/users` 의 같은 이름 함수와 **본문이 같다.** 두 화면이 같은 목록을
+ * 필터만 달리해 보는 것이라 그렇고(아래 화면 주석), 공용 모듈로 빼지 않는 것은
+ * 의도다 — 이 함수는 Java 이관 시 `fetchApiAsUser` 로 되돌릴 자리이므로 화면마다
+ * 제 파일에 있어야 되돌릴 곳이 화면과 1:1 로 보인다.
+ *
+ * 이 화면은 세션이 있어야 답이 나오는 화면이라 응답이 사용자마다 다르고, 그래서
+ * 예전의 fetchApiAsUser 는 no-store 였다 — fetch 캐시가 아예 걸리지 않으니 자기
+ * 라우트로 한 바퀴 도는 비용을 매 요청 그대로 냈다는 뜻이다. 정적화도 세션 때문에
+ * 불가능하다 (CLAUDE.md "서버 컴포넌트의 self-fetch").
+ *
+ * **권한은 그대로 두 겹이다.** `requireRole("ADMIN")` 이 돌려준 세션을 그대로
+ * 넘기므로, 라우트 핸들러가 `getSession()` 으로 읽어 넘기던 값과 같다 —
+ * userService.listUsersForAdmin 의 `assertRole("ADMIN")` 은 이전과 똑같이
+ * 호출된다. 화면 가드가 데이터 가드를 대체하지 않는다.
+ *
+ * 반환 타입을 `AdminUserListBody` 로 두는 것도 의도다. 라우트가 내려주던 것과
+ * 같은 모양이라 화면 코드가 예외를 눈치채지 못하고, Java 이관 시 이 함수 본문만
+ * `fetchApiAsUser` 로 되돌리면 끝난다.
+ */
+async function adminUserList(
+  session: SessionPayload,
+  params: { role: Role; status?: string; page?: string },
+): Promise<AdminUserListBody> {
+  const result = await userService.listUsersForAdmin(session, {
+    role: params.role,
+    status: params.status,
+    page: readNumberParam(params.page),
+  });
+
+  return {
+    users: result.items,
+    total: result.total,
+    page: result.page,
+    size: result.size,
+    role: result.role,
+    status: result.status,
+  };
 }
 
 /**
@@ -49,13 +93,11 @@ export default async function AdminAdminsPage({
   // 목록을 그려 버리면 관리자 관리 화면이 조용히 사용자 관리 화면이 된다.
   // 어떤 역할을 보여줄 것인가는 화면의 규칙이라 service 로 내리지 않는다
   // (status·page 는 그대로 넘겨 service 가 접는다).
-  const query = new URLSearchParams({ role: scopeRole(role) });
-  if (status) query.set("status", status);
-  if (page) query.set("page", page);
-
-  const body = await fetchApiAsUser<AdminUserListBody>(
-    `/api/admin/users?${query.toString()}`,
-  );
+  const body = await adminUserList(session, {
+    role: scopeRole(role),
+    status,
+    page,
+  });
 
   return (
     <AdminShell role={session.role}>
