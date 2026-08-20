@@ -23,6 +23,7 @@ import type {
   PageSummary,
   ReportPreview,
   Role,
+  TagSummary,
   User,
   UserStatus,
   ViewerRole,
@@ -119,6 +120,22 @@ export type PageSearchListBody = PagedPageListBody & {
   query: string;
   category: string | null;
 };
+
+/**
+ * GET /api/tags — 전체 태그 + 각 태그의 공개 문서 수.
+ *
+ * **PagedPageListBody 계열과 아무 관계가 없다.** 저쪽은 게시물 컬렉션이고
+ * 이쪽은 태그 컬렉션이다 — 그래서 태그로 좁힌 게시물 목록
+ * (`GET /api/pages?tag=`)은 이 타입이 아니라 PagedPageListBody 를 쓴다.
+ *
+ * total 이 없다. 페이지네이션이 없어서 서버가 접을 page/size 도 없고, 되돌려줄
+ * "적용된 값"이 아예 존재하지 않는다 (AdminCategoryListBody 와 같은 판단).
+ * 언제 페이지네이션을 넣을지는 tagService.listTags 주석에 조건으로 적어 두었다.
+ *
+ * 실리는 태그는 **공개 문서가 1건 이상인 것뿐이다.** 고아 태그를 거르는 규칙은
+ * service 가 갖는다 (근거는 같은 주석).
+ */
+export type TagListBody = { tags: TagSummary[] };
 
 /** GET /api/pages/[id] — 상세. 여기서만 content(ProseMirror JSON)가 실린다. */
 export type PageDetailBody = { page: PageDetail };

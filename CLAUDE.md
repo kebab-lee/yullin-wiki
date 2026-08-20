@@ -175,16 +175,21 @@ docs/                       설계 문서
 
 ### 읽기 페이지는 정적으로 생성된다
 
-- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`) · 항목 목록(`/categories`).**
-  셋 다 빌드 시점에 HTML 로 만들어지고 `REVALIDATE` 수명이 지나거나
-  `revalidatePath` 가 털면 다시 만들어진다.
+- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`) · 항목 목록(`/categories`) ·
+  전체 태그 목록(`/tags`).** 넷 다 빌드 시점에 HTML 로 만들어지고 `REVALIDATE`
+  수명이 지나거나 `revalidatePath` 가 털면 다시 만들어진다.
   `/pages/[id]` 는 `generateStaticParams` 로 공개 문서를 미리 만들고
   `dynamicParams = true` 라 그 뒤에 발행된 글은 첫 요청 때 만들어진다.
+  `/tags` 는 태그가 늘어 `?page=` 를 붙이는 날 이 줄에서 빠진다 — 그 조건은
+  `tagService.listTags` 주석에 적혀 있다.
 - **동적: 검색 · 항목별 목록(`/categories/[slug]`) · 전체 목록(`/pages`) ·
-  어드민 · 마이페이지.** 앞의 셋은 `searchParams`(`?q=` · `?page=`) 때문이고
-  뒤의 둘은 세션 때문이다. **`searchParams` 를 읽는 페이지는 정적이 될 수 없다** —
+  태그별 목록(`/tags/[name]`) · 어드민 · 마이페이지.** 앞의 넷은
+  `searchParams`(`?q=` · `?page=`) 때문이고 뒤의 둘은 세션 때문이다.
+  **`searchParams` 를 읽는 페이지는 정적이 될 수 없다** —
   `generateStaticParams` 를 붙이면 빌드 표에 `●` 로 찍히지만 HTML 은 생기지 않는다
   (그 측정 기록은 `categories/[slug]/page.tsx` 주석에 있다).
+  `/tags/[name]` 은 태그 목록이 유한해서 `generateStaticParams` 가 **가능한데도**
+  안 되는 경우다 — 막는 것은 params 가 아니라 `?page=` 다.
 - **정적 페이지에서 `getViewerRole()`·`cookies()` 를 부르지 마라.** 부르는 순간
   그 라우트는 동적으로 돌아간다. 세션이 필요한 조각은 헤더와 같은 방식으로
   브라우저에서 스스로 묻는다 (`viewerRoleClient`) — 게시물 상세에서는
@@ -458,6 +463,24 @@ docs/                       설계 문서
     때문이다. 근거는 그 함수 주석에 있다.
   - **DB View 나 RPC 로 옮기지 마라** (→ `## DB`). service 레이어에서 한 번에
     묶어 세는 쪽이 Java 이관 시 그대로 옮겨진다.
+- **`notFound()` 가 HTTP 200 을 반환한다.** `(site)/loading.tsx` 가 Suspense 경계를
+  만들어서 셸이 먼저 나가고, 상태 코드는 그때 이미 확정된다 — 뒤이어 스트림으로
+  오는 not-found UI 가 그것을 되돌리지 못한다.
+  - **화면은 정상이다.** 사용자에게는 없는 페이지가 없는 페이지로 보인다. 문제는
+    **검색엔진이 그 페이지를 200 으로 읽고 색인한다**는 것이다.
+  - **이 라우트 저 라우트의 문제가 아니라 전역이다.** `/categories/nope` · 없는
+    게시물 id · 없는 태그가 전부 같다. 어느 한 화면에서 고치려 들지 마라 —
+    고칠 자리는 그 Suspense 경계이지 `notFound()` 를 부르는 페이지가 아니다.
+- **범위를 넘는 `?page=` 가 500 이다.** PostgREST 의 `.range()` 가 총 건수를 넘는
+  오프셋에 416(Range Not Satisfiable)을 내고, 그게 그대로 500 으로 올라온다.
+  `/pages?page=99` · `/categories/[slug]?page=99` · `/tags/[name]?page=99` 가 모두
+  같다.
+  - **셋을 함께 봐야 한다** — `findAllPaged` · `findByCategorySlug` ·
+    `findByTagName`. 한 곳만 고치면 같은 URL 모양이 목록마다 다르게 실패한다.
+  - 자연스러운 답은 둘이다: **마지막 페이지로 접거나, 404.** 500 만 아니면 된다 —
+    지금은 사용자가 주소를 조금 잘못 친 것이 서버 장애로 보인다.
+  - 어느 쪽이든 **판정은 service 다.** 잘못된 page 값을 안전한 값으로 접는 규칙이
+    이미 거기 있고(`positiveInt`), 상한만 지금 total 을 몰라서 비어 있는 것이다.
 
 ## 참고 문서
 

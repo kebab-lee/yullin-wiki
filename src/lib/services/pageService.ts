@@ -15,6 +15,7 @@ import { NotFoundError, ValidationError } from "@/lib/errors";
 import * as categoryRepository from "@/lib/repositories/categoryRepository";
 import * as pageRepository from "@/lib/repositories/pageRepository";
 import * as pageRevisionRepository from "@/lib/repositories/pageRevisionRepository";
+import * as tagRepository from "@/lib/repositories/tagRepository";
 import type {
   AdminPageSummary,
   Page,
@@ -47,6 +48,7 @@ const DEFAULT_PAGE_SIZE = 10;
 
 const NOT_FOUND_CATEGORY = "존재하지 않는 항목입니다.";
 const NOT_FOUND_PAGE = "게시물을 찾을 수 없습니다.";
+const NOT_FOUND_TAG = "존재하지 않는 태그입니다.";
 
 /**
  * 공개 화면에 노출해도 되는 게시물인가.
@@ -157,6 +159,45 @@ export async function listPagesByCategory(
   const window = toPageWindow(pagination);
 
   const { items, total } = await pageRepository.findByCategorySlug(slug, window);
+
+  return { items, total, ...window };
+}
+
+/**
+ * 태그 하나에 걸린 공개 게시물 목록 (`/tags/[name]`).
+ *
+ * **검색이 아니다.** 태그는 정확 일치라 유사도로 순위를 매길 근거가 없고, 그래서
+ * 검색 RPC 에 태그 파라미터를 얹지 않고 별도 조회로 둔다 — 검색에 얹으면
+ * "본문에 그 단어가 있는 문서"까지 딸려 와서 "같은 태그끼리 모아본다"는 목적과
+ * 어긋난다. 정렬·페이지 규칙(toPageWindow)은 listPagesByCategory 와 같다.
+ *
+ * 없는 태그는 빈 목록이 아니라 NotFoundError 다 — 오타 난 URL 이 "아직 글이 없는
+ * 태그"처럼 보이면 사용자가 계속 기다린다 (listPagesByCategory 와 같은 판단).
+ * 존재 확인을 목록 쿼리에 맡길 수 없는 것도 같은 이유다(빈 결과는 두 경우에 모두
+ * 나온다).
+ *
+ * **다만 "존재"의 기준이 tags 행이지 공개 문서가 아니다.** 태그는 남아 있는데
+ * 걸린 글이 전부 숨겨지거나 지워진 상태는 404 가 아니라 빈 목록이다 — 그 태그는
+ * 실재했고, 링크가 살아 있던 URL 이 갑자기 "그런 태그 없음"으로 바뀌면 사용자는
+ * 자기가 주소를 잘못 쳤다고 읽는다. (그래서 존재 확인은 tagRepository.existsByName
+ * 이고, 공개 문서 수를 세는 tagRepository.findAll 이 아니다.)
+ *
+ * 이름을 여기서 trim 한다. 앞뒤 공백은 사용자가 의도한 태그 이름이 아니고,
+ * 저장 시점에도 이미 지워져 있다(validation/page 의 readTags).
+ */
+export async function listPagesByTag(
+  name: string,
+  pagination: { page?: number; size?: number } = {},
+): Promise<{ items: PageSummary[]; total: number; page: number; size: number }> {
+  const tag = name.trim();
+
+  if (!tag || !(await tagRepository.existsByName(tag))) {
+    throw new NotFoundError(NOT_FOUND_TAG);
+  }
+
+  const window = toPageWindow(pagination);
+
+  const { items, total } = await pageRepository.findByTagName(tag, window);
 
   return { items, total, ...window };
 }

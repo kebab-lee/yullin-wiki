@@ -40,6 +40,10 @@ export function apiUrl(path: string): string {
  *   categories  시드로 고정된 값이라 거의 안 바뀐다. 길게 잡는다.
  *   pages       목록·상세의 공개 조회.
  *
+ * **태그(`/api/tags`)에는 전용 수명을 두지 않고 `pages` 를 쓴다.** 그 목록이
+ * 세는 것이 공개 게시물이라 게시물과 정확히 같은 순간에 낡는다 — 수를 따로 두면
+ * 같은 사실을 두 수명이 다르게 말하게 되고, 태그 목록만 남아 사라진 글을 센다.
+ *
  * **pages 의 수명이 "발행이 보이기까지의 지연"이 아니다.** 게시물을 만들거나
  * 고치거나 상태를 바꾸는 네 경로(POST /api/admin/pages · PATCH·DELETE
  * /api/admin/pages/[id] · PATCH .../status)가 전부 `revalidatePath("/", "layout")`

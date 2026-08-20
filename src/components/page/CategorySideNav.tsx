@@ -22,10 +22,18 @@ import { categoryHref } from "@/lib/search/searchUrl";
  * 검색 화면이면서 동시에 그 항목 칸이 켜져 있는 상태라, `slug` 를 optional 로
  * 단다. 없으면 예전처럼 아무 칸도 켜지지 않는다(전체 검색).
  */
+/**
+ * 태그별 목록(`/tags/[name]`)도 네비의 어느 칸도 아니다. `search` 를 빌려 쓰지
+ * 않는 이유는 그것이 거짓말이기 때문이다 — 태그는 유사도 순위가 아니라 정확
+ * 일치 컬렉션이고, 언젠가 `search` 변형에 검색 전용 표시가 붙으면 태그 화면이
+ * 조용히 그것을 물려받는다. 아무 칸도 켜지지 않는 것은 지금 같지만 **같은
+ * 이유로 같은 것이 아니다.**
+ */
 type SideNavCurrent =
   | { type: "category"; slug: string }
   | { type: "recent" }
-  | { type: "search"; slug?: string };
+  | { type: "search"; slug?: string }
+  | { type: "tag" };
 
 type CategorySideNavProps = {
   current: SideNavCurrent;

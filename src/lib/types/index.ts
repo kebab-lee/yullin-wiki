@@ -28,6 +28,7 @@ export type {
   UpdatePageData,
 } from "./page";
 export type { CreatePageRevisionData } from "./pageRevision";
+export type { TagSummary } from "./tag";
 export type {
   AdminCommentSummary,
   AdminReportSummary,

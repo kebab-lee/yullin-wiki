@@ -307,6 +307,61 @@ export async function findByCategorySlug(
 }
 
 /**
+ * 태그 하나에 걸린 공개 게시물 한 페이지 + 전체 건수 (`/tags/[name]`).
+ *
+ * 조회 키가 tag id 가 아니라 **이름**인 것은 URL 이 그렇기 때문이다. tags.name
+ * 은 unique 이고 태그에는 이름과 별개의 표시명이 없어서, 카테고리의 slug 처럼
+ * "표시명이 바뀌어도 안 흔들리는 식별자"를 따로 둘 이유가 없다. 게시물 계약
+ * (PageSummary.tags)도 이미 이름 배열이다.
+ *
+ * ── select 문자열에 page_tags 가 두 번 등장하는 이유 ──────────
+ * 하는 일이 서로 다르다.
+ *   · `page_tags(tags(name))`  SUMMARY_COLUMNS 에 이미 들어 있는 **표시용** 조회다.
+ *                              카드에 그 글의 태그를 **전부** 그려야 한다.
+ *   · `tag_filter:…!inner(…)`  이 목록을 좁히는 **필터용** 조인이다. 결과 컬럼은
+ *                              쓰지 않는다 (findByCategorySlug 의 `categories!inner`
+ *                              과 같은 역할).
+ * 필터용 쪽을 별칭 없이 쓰면 같은 임베디드 리소스를 두 번 선언하는 셈이라
+ * PostgREST 가 갈라 주지 못하고, `!inner` 가 표시용 조회까지 좁혀서 **카드에
+ * 방금 클릭한 태그 하나만** 남는다. 별칭이 그 사고를 막는다.
+ *
+ * 공개 조건은 publicPages 에서 받는다. 실재하지 않는 태그 이름이면 여기서는 빈
+ * 목록으로 보인다 — "없는 태그"와 "글이 없는 태그"를 가르는 것은 service 의 몫이다
+ * (findByCategorySlug 와 같은 분담).
+ *
+ * 정렬은 최신순이다. **유사도 정렬이 아니다** — 태그는 정확 일치라 순위를 매길
+ * 근거가 없고, 그래서 검색 RPC 가 아니라 평범한 목록 질의다. `id` 를 두 번째
+ * 키로 두는 것은 offset 페이지네이션 때문이다: 같은 시각에 발행된 글이 둘 이상
+ * 있으면 전순서가 아니라, 페이지를 넘길 때 같은 글이 두 번 나오거나 건너뛰어진다.
+ */
+export async function findByTagName(
+  name: string,
+  { page, size }: Pagination,
+): Promise<{ items: PageSummary[]; total: number }> {
+  const from = (page - 1) * size;
+
+  const query = getSupabase()
+    .from(TABLE)
+    .select(`${SUMMARY_COLUMNS}, tag_filter:${PAGE_TAG_TABLE}!inner(${TAG_TABLE}!inner(name))`, {
+      count: "exact",
+    });
+  publicPages(query);
+
+  const { data, count, error } = await query
+    .eq(`tag_filter.${TAG_TABLE}.name`, name)
+    .eq("comments.status", "VISIBLE")
+    .order("published_at", { ascending: false })
+    .order("id", { ascending: true })
+    .range(from, from + size - 1)
+    .returns<PageSummaryRow[]>();
+
+  if (error) throw new Error(`태그 게시물 조회 실패: ${error.message}`);
+
+  return { items: (data ?? []).map(toSummary), total: count ?? 0 };
+}
+
+
+/**
  * 어드민 위키 관리 목록 한 페이지 + 전체 건수 (`/admin/pages`).
  *
  * **publicPages 를 쓰지 않는다.** 공개 조건(`status = 'PUBLISHED'`)이 걸리면
