@@ -175,13 +175,11 @@ docs/                       설계 문서
 
 ### 읽기 페이지는 정적으로 생성된다
 
-- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`) · 항목 목록(`/categories`) ·
-  전체 태그 목록(`/tags`).** 넷 다 빌드 시점에 HTML 로 만들어지고 `REVALIDATE`
-  수명이 지나거나 `revalidatePath` 가 털면 다시 만들어진다.
+- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`) · 항목 목록(`/categories`).**
+  셋 다 빌드 시점에 HTML 로 만들어지고 `REVALIDATE` 수명이 지나거나
+  `revalidatePath` 가 털면 다시 만들어진다.
   `/pages/[id]` 는 `generateStaticParams` 로 공개 문서를 미리 만들고
   `dynamicParams = true` 라 그 뒤에 발행된 글은 첫 요청 때 만들어진다.
-  `/tags` 는 태그가 늘어 `?page=` 를 붙이는 날 이 줄에서 빠진다 — 그 조건은
-  `tagService.listTags` 주석에 적혀 있다.
 - **동적: 검색 · 항목별 목록(`/categories/[slug]`) · 전체 목록(`/pages`) ·
   태그별 목록(`/tags/[name]`) · 어드민 · 마이페이지.** 앞의 넷은
   `searchParams`(`?q=` · `?page=`) 때문이고 뒤의 둘은 세션 때문이다.
@@ -190,6 +188,15 @@ docs/                       설계 문서
   (그 측정 기록은 `categories/[slug]/page.tsx` 주석에 있다).
   `/tags/[name]` 은 태그 목록이 유한해서 `generateStaticParams` 가 **가능한데도**
   안 되는 경우다 — 막는 것은 params 가 아니라 `?page=` 다.
+- **전체 태그 목록(`/tags`)은 임시로 동적이다 — 정적이 될 수 있는데 첫 배포가
+  막는다.** 화면 조건은 `/categories` 와 같고(params·searchParams·세션 셋 다 안
+  읽는다) 정적 생성도 실측으로 확인됐지만, 의존하는 `/api/tags` 가 신규
+  엔드포인트라 빌드 시점 self-fetch 가 404 로 죽는다 (→ `## 로컬 개발` 의
+  "신규 API 에 의존하는 정적 페이지는 두 번에 나눠 배포한다"). 그래서
+  `force-dynamic` 이 한 줄 붙어 있고, `/api/tags` 가 배포된 뒤 그 줄을 지우면
+  위 정적 목록으로 올라온다.
+  그와 별개로, 태그가 늘어 `?page=` 를 붙이는 날에는 그때부터 진짜 동적이 된다 —
+  그 조건은 `tagService.listTags` 주석에 적혀 있다.
 - **정적 페이지에서 `getViewerRole()`·`cookies()` 를 부르지 마라.** 부르는 순간
   그 라우트는 동적으로 돌아간다. 세션이 필요한 조각은 헤더와 같은 방식으로
   브라우저에서 스스로 묻는다 (`viewerRoleClient`) — 게시물 상세에서는
@@ -415,8 +422,9 @@ docs/                       설계 문서
   self-fetch 하는데 빌드 시점에는 그 서버가 없다. 그냥 `npm run build` 하면
   `ECONNREFUSED` 로 죽는다. `getBaseUrl()` 이 `NEXT_PUBLIC_SITE_URL` →
   `VERCEL_URL` → `localhost:$PORT` 순으로 보기 때문이다.
-- **Vercel 빌드는 정상이다** — `NEXT_PUBLIC_SITE_URL` 이 기존 배포를 가리킨다.
-  로컬에서만 걸리는 마찰이다.
+- **Vercel 빌드는 대개 정상이다** — `NEXT_PUBLIC_SITE_URL` 이 기존 배포를
+  가리키므로 응답해 줄 서버가 있다. 로컬에서만 걸리는 마찰이다.
+  **단, 그 기존 배포에 없는 API 를 부르면 Vercel 에서도 깨진다** → 아래 절.
 - **⚠️ dev 서버를 띄우고 같은 디렉터리에서 빌드하면 안 된다.** 둘이 `.next` 를
   공유하는데 `next build` 가 그걸 갈아엎어서, dev 서버가 자기 청크를 잃고
   `Cannot find module for page: /_document` · 500 을 뱉기 시작한다. 빌드는 그걸
@@ -443,6 +451,28 @@ docs/                       설계 문서
   쓰게 하면 된다. 그러면 트리 복사 없이 `NEXT_DIST_DIR=.next-dev npx next dev
   -p 3111` + `PORT=3111 npm run build` 두 줄로 끝난다. **아직 적용하지 않았다** —
   `.gitignore` 에 그 디렉터리를 더하는 것까지 함께 판단할 일이라 남겨 둔다.
+
+### 신규 API 에 의존하는 정적 페이지는 두 번에 나눠 배포한다
+
+- **빌드 시점의 self-fetch 는 "지금 배포돼 있는 사이트"로 나간다.** `getBaseUrl()`
+  이 `NEXT_PUBLIC_SITE_URL` 을 보기 때문이다. 그래서 **이번 커밋에서 처음 만든
+  라우트 핸들러**를 정적 페이지가 부르면, 빌드는 그것이 아직 없는 옛 배포에 대고
+  묻는다 → 404 → `Error occurred prerendering page` → 배포 전체 실패.
+- **화면의 문제가 아니라 배포 순서의 문제다.** 정적 생성 조건을 전부 만족해도
+  걸린다. `/pages/[id]` 가 멀쩡했던 것은 `/api/pages` 가 이미 배포돼 있었기
+  때문이고, `/tags` 는 신규 API 에 의존한 첫 정적 페이지라 이제야 드러났다.
+- **처방: 두 번에 나눠 배포한다.**
+  1. 그 페이지에 `export const dynamic = "force-dynamic"` 을 붙여 배포한다 —
+     프리렌더를 건너뛰므로 빌드가 통과하고, 그 배포로 새 API 가 살아난다.
+  2. 그 줄을 지우고 다시 배포한다 — 이제 빌드가 부르는 API 가 존재하므로
+     정적으로 생성된다.
+  붙일 때 **왜 붙였는지와 언제 지우는지를 주석으로 남긴다.** 안 남기면 임시
+  조치가 영구 설정으로 굳는다 (`(site)/tags/page.tsx` 가 그 본보기다).
+- **`generateStaticParams` 도 같은 함정이다.** 프리렌더뿐 아니라 params 를
+  가져오는 빌드 중 fetch 도 같은 origin 으로 나간다.
+- **근본 해결(빌드 시점에는 service 를 직접 부른다)은 지금 하지 않는다.**
+  `## 레이어 규칙` 의 self-fetch 원칙에 예외를 하나 더 만드는 일이고, 지금까지
+  걸린 화면이 하나뿐이다. **이 패턴이 반복되면 그때 재검토한다.**
 
 ## 미완료 항목
 
