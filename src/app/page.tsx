@@ -1,6 +1,11 @@
 import HeroHeaderBar from "@/components/home/HeroHeaderBar";
 import SearchInput from "@/components/common/SearchInput";
 import LinkBadge from "@/components/home/LinkBadge";
+import {
+  GlobeIcon,
+  InstagramIcon,
+  YoutubeIcon,
+} from "@/components/home/LinkBadgeIcons";
 import CategoryButtonRow from "@/components/home/CategoryButtonRow";
 import RecentPostCard from "@/components/home/RecentPostCard";
 import SectionHeader from "@/components/home/SectionHeader";
@@ -118,16 +123,19 @@ export default async function HomePage() {
                   topLabel="열린교회"
                   bottomLabel="공식페이지"
                   href="https://www.yullin.org"
+                  icon={<GlobeIcon />}
                 />
                 <LinkBadge
                   topLabel="청년부"
                   bottomLabel="인스타그램"
                   href="https://www.instagram.com/yullin_yct"
+                  icon={<InstagramIcon />}
                 />
                 <LinkBadge
                   topLabel="청년부"
                   bottomLabel="Youtube"
                   href="https://youtube.com/@yullinyouth?si=7_STglS5ddSmRXuT"
+                  icon={<YoutubeIcon />}
                 />
               </div>
             </div>

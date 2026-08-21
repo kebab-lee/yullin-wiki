@@ -4,36 +4,18 @@ import { fetchApi } from "@/lib/api/serverFetch";
 import type { TagListBody } from "@/lib/api/types";
 
 /**
- * ⚠️ 임시 — `/api/tags` 가 배포된 뒤 이 한 줄을 지우면 정적으로 돌아간다.
- *
- * 빌드 시점의 self-fetch 는 `getBaseUrl()` 이 가리키는 `NEXT_PUBLIC_SITE_URL`,
- * 즉 **지금 배포돼 있는 사이트**로 나간다. `/api/tags` 는 이번에 새로 만든
- * 엔드포인트라 거기엔 아직 없다 → 프리렌더가 404 로 죽고 배포 전체가 깨진다.
- * (`/pages/[id]` 가 같은 방식으로 멀쩡했던 것은 `/api/pages` 가 이미 배포돼
- * 있었기 때문이다. 이 화면이 신규 API 에 의존하는 첫 정적 페이지다.)
- *
- * **신규 API 에 의존하는 정적 페이지는 첫 배포에서 반드시 실패한다.** 이
- * 화면만의 사고가 아니라 구조적 함정이라 CLAUDE.md 의 빌드 절에도 적어 두었다.
- * 그래서 두 번에 나눠 배포한다: ① 이 줄과 함께 배포해 `/api/tags` 를 띄우고,
- * ② 이 줄을 지우고 다시 배포하면 정적이 된다.
- *
- * **이 화면은 정적 생성이 가능하다** — 실측으로 확인했다. `tags.html` 33KB 가
- * 만들어지고 prerender-manifest 에도 등록된다. 막고 있는 것은 화면의 성질이
- * 아니라 배포 순서뿐이다.
- *
- * 잃는 것은 HTML 프리렌더뿐이고 아래 `fetchApi` 의 `REVALIDATE.pages` 는 그대로
- * 산다 — `force-dynamic` 은 명시적 revalidate 를 가진 fetch 는 건드리지 않는다.
- */
-export const dynamic = "force-dynamic";
-
-/**
  * 전체 태그 목록 — `/tags`
  *
- * ── 이 페이지는 정적으로 생성된다 (지금은 위 `dynamic` 이 막고 있다) ──
+ * ── 이 페이지는 정적으로 생성된다 ──
  * `params` 도 `searchParams` 도 세션도 읽지 않고, 데이터는 캐시되는 fetch
  * 하나(`/api/tags`)뿐이다. `/categories` 와 같은 조건이며, 셋 중 하나라도 읽는
  * 순간 이 라우트는 동적으로 돌아간다 — 태그가 많아져 `?page=` 를 붙이는 날이
  * 그날이다 (`/tags/[name]` 이 이미 그 이유로 동적이다).
+ *
+ * 이 화면은 신규 API 에 의존한 첫 정적 페이지라 첫 배포에서만 `force-dynamic`
+ * 을 한 번 거쳐 왔다 (→ CLAUDE.md `## 로컬 개발` 의 "신규 API 에 의존하는 정적
+ * 페이지는 두 번에 나눠 배포한다"). `/api/tags` 가 배포된 지금은 빌드 시점
+ * self-fetch 가 응답을 받으므로 그 줄이 없다.
  *
  * 갱신은 게시물 쪽 경로가 맡는다. 태그와 그 문서 수를 바꾸는 유일한 길이
  * 게시물의 작성·수정·상태 전환·삭제인데, 그 넷이 전부

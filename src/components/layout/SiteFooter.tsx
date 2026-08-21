@@ -86,7 +86,7 @@ export default function SiteFooter({ categories }: SiteFooterProps) {
               </div>
 
               {/* SNS */}
-              <div className="flex flex-col items-start gap-5 lg:items-end">
+              {/* <div className="flex flex-col items-start gap-5 lg:items-end">
                 <p className="whitespace-nowrap text-footer-title text-brand-red-white">
                   열린교회 SNS
                 </p>
@@ -96,12 +96,14 @@ export default function SiteFooter({ categories }: SiteFooterProps) {
                   width={56}
                   height={24}
                 />
-              </div>
+              </div> */}
             </div>
 
             {/* 주소 */}
             <div className="flex flex-col gap-[8px] whitespace-nowrap lg:flex-row lg:items-center lg:gap-5">
-              <p className="text-footer-title text-brand-red-white">열린교회 주소</p>
+              <p className="text-footer-title text-brand-red-white">
+                열린교회 주소
+              </p>
               <p className="text-footer-content text-brand-red-pink">
                 경기 안양시 동안구 흥안대로439번길 31
               </p>

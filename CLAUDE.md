@@ -175,9 +175,9 @@ docs/                       설계 문서
 
 ### 읽기 페이지는 정적으로 생성된다
 
-- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`) · 항목 목록(`/categories`).**
-  셋 다 빌드 시점에 HTML 로 만들어지고 `REVALIDATE` 수명이 지나거나
-  `revalidatePath` 가 털면 다시 만들어진다.
+- **정적: 홈(`/`) · 게시물 상세(`/pages/[id]`) · 항목 목록(`/categories`) ·
+  전체 태그 목록(`/tags`).** 넷 다 빌드 시점에 HTML 로 만들어지고 `REVALIDATE`
+  수명이 지나거나 `revalidatePath` 가 털면 다시 만들어진다.
   `/pages/[id]` 는 `generateStaticParams` 로 공개 문서를 미리 만들고
   `dynamicParams = true` 라 그 뒤에 발행된 글은 첫 요청 때 만들어진다.
 - **동적: 검색 · 항목별 목록(`/categories/[slug]`) · 전체 목록(`/pages`) ·
@@ -188,14 +188,12 @@ docs/                       설계 문서
   (그 측정 기록은 `categories/[slug]/page.tsx` 주석에 있다).
   `/tags/[name]` 은 태그 목록이 유한해서 `generateStaticParams` 가 **가능한데도**
   안 되는 경우다 — 막는 것은 params 가 아니라 `?page=` 다.
-- **전체 태그 목록(`/tags`)은 임시로 동적이다 — 정적이 될 수 있는데 첫 배포가
-  막는다.** 화면 조건은 `/categories` 와 같고(params·searchParams·세션 셋 다 안
-  읽는다) 정적 생성도 실측으로 확인됐지만, 의존하는 `/api/tags` 가 신규
-  엔드포인트라 빌드 시점 self-fetch 가 404 로 죽는다 (→ `## 로컬 개발` 의
-  "신규 API 에 의존하는 정적 페이지는 두 번에 나눠 배포한다"). 그래서
-  `force-dynamic` 이 한 줄 붙어 있고, `/api/tags` 가 배포된 뒤 그 줄을 지우면
-  위 정적 목록으로 올라온다.
-  그와 별개로, 태그가 늘어 `?page=` 를 붙이는 날에는 그때부터 진짜 동적이 된다 —
+- **`/tags` 의 조건은 `/categories` 와 같다** — params·searchParams·세션 셋 다
+  읽지 않고 캐시되는 fetch 하나(`/api/tags`)뿐이다. 신규 API 에 의존한 첫 정적
+  페이지라 첫 배포에서만 `force-dynamic` 을 거쳤고(→ `## 로컬 개발` 의 "신규
+  API 에 의존하는 정적 페이지는 두 번에 나눠 배포한다"), `/api/tags` 가 배포된
+  지금은 그 줄 없이 정적으로 생성된다.
+  태그가 늘어 `?page=` 를 붙이는 날에는 그때부터 진짜 동적이 된다 —
   그 조건은 `tagService.listTags` 주석에 적혀 있다.
 - **정적 페이지에서 `getViewerRole()`·`cookies()` 를 부르지 마라.** 부르는 순간
   그 라우트는 동적으로 돌아간다. 세션이 필요한 조각은 헤더와 같은 방식으로
