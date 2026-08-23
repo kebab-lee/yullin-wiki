@@ -237,6 +237,12 @@ export default function PageEditorForm(props: PageEditorFormProps) {
   }
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // 한글 IME 조합 중의 Enter 는 "태그 등록"이 아니라 "조합 확정"이다.
+    // 여기서 태그를 만들어 버리면 입력칸을 비운 직후 확정된 마지막 글자가
+    // 다시 들어오고, 브라우저가 이어서 보내는 두 번째 Enter 가 그 글자를
+    // 또 태그로 등록한다 (열린위키 + 키).
+    if (e.nativeEvent.isComposing) return
+
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault()
       addTag(tagInput)
