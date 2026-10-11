@@ -20,6 +20,7 @@ import type {
 import type { BlockableStatus } from "@/lib/validation/report";
 import { LOGIN_ID_TAKEN } from "@/lib/validation/user";
 
+import { openField, sealField } from "./fieldCipher";
 import { getSupabase } from "./supabaseClient";
 
 const TABLE = "users";
@@ -31,11 +32,14 @@ const USER_COLUMNS =
 /**
  * 어드민 목록이 읽는 컬럼. USER_COLUMNS 의 부분집합이다.
  *
- * 전화번호·생년월일·성별이 빠져 있는 것이 요점이다 — 목록은 다섯 칸만 그리는데
- * 전 컬럼을 읽으면 화면에 안 쓰는 PII 가 응답까지 따라 나간다
- * (AdminUserSummary 주석). 어차피 select 로 안 읽으면 실을 방법도 없다.
+ * 생년월일·성별이 빠져 있는 것이 요점이다 — 화면에 안 쓰는 PII 가 응답까지
+ * 따라 나가지 않게 select 에서부터 읽지 않는다 (AdminUserSummary 주석).
+ *
+ * **phone 은 읽는다.** 동명이인을 가르는 데 뒷자리가 필요하기 때문이다.
+ * 다만 여기서 올리는 것은 복호화한 원래 번호이고, 가리는 판단은 service 가
+ * 한다(userService.listUsersForAdmin) — 익명 댓글의 실명과 같은 경계다.
  */
-const ADMIN_SUMMARY_COLUMNS = "id, login_id, name, role, status, created_at";
+const ADMIN_SUMMARY_COLUMNS = "id, login_id, name, phone, role, status, created_at";
 
 /** Postgres unique_violation. login_id unique 제약과 부딪혔을 때 온다. */
 const PG_UNIQUE_VIOLATION = "23505";
@@ -61,7 +65,7 @@ type UserRowWithHash = UserRow & { password_hash: string };
 /** 어드민 목록 행. ADMIN_SUMMARY_COLUMNS 와 짝이다. */
 type AdminUserSummaryRow = Pick<
   UserRow,
-  "id" | "login_id" | "name" | "role" | "status" | "created_at"
+  "id" | "login_id" | "name" | "phone" | "role" | "status" | "created_at"
 >;
 
 /**
@@ -72,6 +76,18 @@ type AdminUserSummaryRow = Pick<
  * Route Handler 를 넘어 응답 JSON 으로 나가면 안 된다.
  */
 export type UserWithHash = User & { passwordHash: string };
+
+/**
+ * 어드민 목록 한 줄 — 가리기 전 모양.
+ *
+ * AdminUserSummary 와 다른 칸은 하나다: 가린 번호(maskedPhone) 대신 **원래
+ * 번호(phone)** 가 실린다. 이 타입은 repository 와 service 사이에서만 살아 있어야
+ * 하며, service 가 가린 뒤에야 응답 계약(AdminUserSummary)이 된다
+ * (UserWithHash 와 같은 경계).
+ */
+export type AdminUserRecord = Omit<AdminUserSummary, "maskedPhone"> & {
+  phone: string | null;
+};
 
 /** 신규 사용자 입력. role / status / 타임스탬프는 DB 기본값에 맡긴다. */
 export type NewUser = {
@@ -116,7 +132,7 @@ function toUser(row: UserRow): User {
     // varchar + CHECK 제약이 값을 보증한다. 도메인 유니온으로 좁혀서 올린다.
     gender: row.gender as Gender | null,
     birthDate: row.birth_date,
-    phone: row.phone,
+    phone: openField(row.phone),
     isChurchMember: row.is_church_member,
     role: row.role as Role,
     status: row.status as UserStatus,
@@ -126,11 +142,12 @@ function toUser(row: UserRow): User {
   };
 }
 
-function toAdminSummary(row: AdminUserSummaryRow): AdminUserSummary {
+function toAdminRecord(row: AdminUserSummaryRow): AdminUserRecord {
   return {
     id: row.id,
     loginId: row.login_id,
     name: row.name,
+    phone: openField(row.phone),
     role: row.role as Role,
     status: row.status as UserStatus,
     createdAt: row.created_at,
@@ -238,7 +255,7 @@ export async function findUsersForAdmin({
   status?: UserStatus;
   page: number;
   size: number;
-}): Promise<{ items: AdminUserSummary[]; total: number }> {
+}): Promise<{ items: AdminUserRecord[]; total: number }> {
   const from = (page - 1) * size;
 
   const query = getSupabase()
@@ -255,7 +272,7 @@ export async function findUsersForAdmin({
 
   if (error) throw new Error(`사용자 목록 조회 실패: ${error.message}`);
 
-  return { items: (data ?? []).map(toAdminSummary), total: count ?? 0 };
+  return { items: (data ?? []).map(toAdminRecord), total: count ?? 0 };
 }
 
 // ── 생성 ──────────────────────────────────────────────────────
@@ -268,7 +285,8 @@ export async function create(input: NewUser): Promise<User> {
       name: input.name,
       gender: input.gender,
       birth_date: input.birthDate,
-      phone: input.phone,
+      // 저장 직전에 잠근다. 위아래 레이어는 평문만 안다 (fieldCipher 주석).
+      phone: sealField(input.phone),
       is_church_member: input.isChurchMember,
     })
     .select(USER_COLUMNS)
@@ -307,7 +325,7 @@ export async function update(
       name: data.name,
       gender: data.gender,
       birth_date: data.birthDate,
-      phone: data.phone,
+      phone: sealField(data.phone),
       is_church_member: data.isChurchMember,
     })
     .eq("id", id)

@@ -16,6 +16,8 @@ type AdminUserListProps = {
   /** 서버가 실제로 적용한 필터가 함께 들어 있다. 화면은 이 값을 정본으로 그린다. */
   body: AdminUserListBody;
   currentUserId: string;
+  /** 이름 아래 가린 전화번호. `/admin/users` 만 켠다 (AdminUserTable 주석). */
+  showPhone?: boolean;
 };
 
 /**
@@ -55,6 +57,7 @@ export default function AdminUserList({
   roleOptions,
   body,
   currentUserId,
+  showPhone,
 }: AdminUserListProps) {
   // 마지막 페이지는 서버가 되돌려준 size 로 계산한다. 요청한 size 가 상한(50)에서
   // 접혔으면 실제 쪽수가 달라진다.
@@ -93,7 +96,11 @@ export default function AdminUserList({
         />
       </div>
 
-      <AdminUserTable users={body.users} currentUserId={currentUserId} />
+      <AdminUserTable
+        users={body.users}
+        currentUserId={currentUserId}
+        showPhone={showPhone}
+      />
 
       <Pagination
         basePath={paginationBase}

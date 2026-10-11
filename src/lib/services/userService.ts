@@ -21,8 +21,12 @@ import {
   UnauthorizedError,
   ValidationError,
 } from "@/lib/errors";
+import { maskPhone } from "@/lib/format/phone";
 import * as userRepository from "@/lib/repositories/userRepository";
-import type { UserWithHash } from "@/lib/repositories/userRepository";
+import type {
+  AdminUserRecord,
+  UserWithHash,
+} from "@/lib/repositories/userRepository";
 import type { AdminUserSummary, User, UserStatus } from "@/lib/types";
 import {
   BLOCK_ADMIN_TARGET,
@@ -314,6 +318,11 @@ function positiveInt(value: number | undefined, fallback: number): number {
  *
  * 필터 값을 여기서 던지지 않고 접는 이유와, 적용된 값을 되돌려주는 이유는
  * validation/userAdmin 주석에 있다.
+ *
+ * **전화번호는 여기서 가린다.** repository 는 원래 번호를 올리고 이 함수가
+ * 뒷자리만 남겨 내보낸다 (toAdminSummary). 관리자에게도 원래 번호를 보여 주지
+ * 않는 것이 규칙이고, 그 규칙을 아는 곳은 service 하나여야 한다 — 화면이 가리면
+ * 응답에는 원래 번호가 이미 실려 있다.
  */
 export async function listUsersForAdmin(
   session: SessionPayload | null,
@@ -347,7 +356,18 @@ export async function listUsersForAdmin(
   // "필터 없음"은 undefined 가 아니라 null 로 답한다. JSON 은 undefined 를
   // 직렬화하면서 키를 통째로 지워버려, 클라이언트가 "전체"와 "이 서버는 role 을
   // 모른다"를 구분할 수 없게 된다 (listPagesForAdmin 과 같은 규칙).
-  return { items, total, ...window, role: role ?? null, status: status ?? null };
+  return {
+    items: items.map(toAdminSummary),
+    total,
+    ...window,
+    role: role ?? null,
+    status: status ?? null,
+  };
+}
+
+/** 가리기 전 목록 행 → 응답 계약. 원래 번호(phone)는 여기서 떨어진다. */
+function toAdminSummary({ phone, ...rest }: AdminUserRecord): AdminUserSummary {
+  return { ...rest, maskedPhone: phone === null ? null : maskPhone(phone) };
 }
 
 /**

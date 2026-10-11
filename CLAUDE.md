@@ -301,6 +301,36 @@ docs/                       설계 문서
 - **게시물에서 이미지를 빼도 스토리지 파일은 지우지 않는다.** 고아 파일 정리는
   별도 과제다 (되돌리기·이력 때문에 즉시 삭제가 오히려 위험하다).
 
+## 개인정보 암호화
+
+- **`users.phone` 은 앱 서버에서 AES-256-GCM 으로 잠근 뒤 저장한다.**
+  `src/lib/repositories/fieldCipher.ts` 의 `sealField` / `openField` 를 repository 가
+  저장 직전·읽은 직후에 부른다. service 위로는 언제나 평문이다.
+  Java 이관 시 그 자리는 JPA `AttributeConverter` 가 받는다.
+- **저장 포맷이 계약이다** — `v1:<iv>:<ciphertext>:<tag>`(base64, iv 12B, tag 16B,
+  AAD 없음). 키는 `PII_ENCRYPTION_KEY`(32바이트 base64). Java 도 이 포맷 그대로
+  읽어야 한다. `scripts/encrypt-user-phones.mjs` 가 같은 포맷을 한 번 더 적고 있으니
+  **한쪽만 바꾸지 마라.**
+- **⚠️ 키를 잃으면 번호를 복구할 수 없다.** 로컬(`.env.local`)과 Vercel 이 같은 키여야
+  같은 DB 를 읽는다. 키 교체 절차는 아직 없다(v2 를 만들고 다시 잠그는 스크립트가 필요하다).
+- **pgcrypto 로 옮기지 마라.** 키가 SQL 에 실려 로그에 남고 `## DB` 의 "DB 로직 최소"에
+  어긋난다.
+- 암호문이라 **phone 으로 검색·중복 체크를 할 수 없다.** 필요해지면 별도 해시 컬럼
+  (HMAC)을 두는 것이 답이고, 복호화해서 훑는 것은 답이 아니다.
+- **수집 목적은 동명이인 식별이다.** 그래서 관리자에게도 원래 번호를 보여 주지 않고
+  가운데를 가린 값(`010-****-0000`, `format/phone.ts` 의 `maskPhone`)만 내보낸다.
+  가리는 것은 service 다 — repository 는 원래 번호를 올리고
+  (`AdminUserRecord` · `AdminReportRecord`), `userService.listUsersForAdmin` ·
+  `reportService.listReportsForAdmin` 이 가려서 응답 계약(`AdminUserSummary.maskedPhone` ·
+  `AdminReportSummary.authorMaskedPhone`)으로 바꾼다. 화면이 가리면 응답에는 이미
+  원래 번호가 실려 있다.
+- 가린 번호를 그리는 화면은 **`/admin/users` 와 `/admin/reports`(차단 대상 작성자)
+  둘뿐이다.** `/admin/admins` 는 같은 목록이지만 `showPhone` 을 켜지 않는다.
+  신고자 번호는 읽지도 않는다(신고자에게는 아무 조작도 하지 않는다).
+- **`openField` 는 지금 `v1:` 이 없는 값을 평문으로 통과시킨다 — 임시다.** 이관
+  스크립트를 돌린 뒤 인자 없이 다시 돌려 "남은 평문 0건"이 확인되면 그 분기를 지우고
+  던지게 바꾼다.
+
 ## 에디터 / 본문 포맷
 
 - 에디터는 **Tiptap**. `pages.content`에는 Tiptap이 내보내는 **ProseMirror 문서 JSON을

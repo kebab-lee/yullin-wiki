@@ -44,7 +44,8 @@ export const LOGIN_ID_TAKEN = "⚠ 중복된 아이디입니다";
 export const LOGIN_FAILED = "아이디 혹은 비밀번호가 잘못되었습니다.";
 
 // ── 규칙 ──────────────────────────────────────────────────────
-// users.login_id varchar(30) / name varchar(50) / phone varchar(20) 과 맞춘다.
+// users.login_id varchar(30) / name varchar(50) 과 맞춘다. phone 은 암호문으로 저장돼
+// 컬럼 길이가 평문 길이를 묶지 않는다 — 길이는 PHONE_PATTERN 이 묶는다.
 const LOGIN_ID_PATTERN = /^[a-z0-9_]{4,20}$/;
 /** 영문·숫자·특수문자를 모두 포함한 공백 없는 8~20자. */
 const PASSWORD_PATTERN =

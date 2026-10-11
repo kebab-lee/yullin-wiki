@@ -92,7 +92,7 @@ erDiagram
     varchar name
     varchar gender
     date birth_date
-    varchar phone
+    varchar phone "AES-256-GCM 암호문"
     boolean is_church_member
     varchar role
     varchar status

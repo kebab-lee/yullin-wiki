@@ -174,6 +174,12 @@ export interface AdminReportSummary {
   /** 신고당한 댓글의 작성자. 차단 액션의 대상이다. */
   authorId: string;
   authorName: string | null;
+  /**
+   * 작성자의 가운데를 가린 전화번호 (`010-****-0000`). 차단 대상이 동명이인 중
+   * 누구인지 가르는 용도다 — AdminUserSummary.maskedPhone 과 같은 규칙이고
+   * 원래 번호는 싣지 않는다. 탈퇴 회원이면 null.
+   */
+  authorMaskedPhone: string | null;
   authorStatus: UserStatus;
   isAnonymous: boolean;
 

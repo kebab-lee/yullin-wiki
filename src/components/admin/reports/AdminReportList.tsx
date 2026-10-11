@@ -93,6 +93,12 @@ export default function AdminReportList({ reports }: AdminReportListProps) {
                         함께 남긴다 — 그것도 처리 판단의 재료다. */}
                     {report.authorName ?? WITHDRAWN_USER_NAME}
                   </span>
+                  {/* 가린 번호 — 차단 대상이 동명이인 중 누구인지 가른다. */}
+                  {report.authorMaskedPhone && (
+                    <span className="ml-[4px] whitespace-nowrap">
+                      ({report.authorMaskedPhone})
+                    </span>
+                  )}
                   {report.isAnonymous && (
                     <span className="ml-[4px] rounded-pill bg-gray2 px-[6px] py-[1px] text-[12px] text-gray4">
                       {ANONYMOUS_BADGE}

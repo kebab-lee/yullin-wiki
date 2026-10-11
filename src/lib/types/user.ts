@@ -100,10 +100,9 @@ export interface User {
 /**
  * 어드민 사용자 목록 한 줄 (`/admin/users` · `/admin/admins`).
  *
- * **User 를 그대로 싣지 않는 것이 이 타입의 핵심이다.** 목록이 그리는 것은
- * 아이디·이름·역할·상태·가입일 다섯 칸뿐인데 User 를 내보내면 전화번호·생년월일·
- * 성별까지 전 사용자분이 한 응답에 실려 나간다. 화면에 안 그린다고 안 나가는 것이
- * 아니다 — 계약에 실리면 브라우저까지 간다.
+ * **User 를 그대로 싣지 않는 것이 이 타입의 핵심이다.** User 를 내보내면
+ * 전화번호·생년월일·성별까지 전 사용자분이 한 응답에 실려 나간다. 화면에 안
+ * 그린다고 안 나가는 것이 아니다 — 계약에 실리면 브라우저까지 간다.
  *
  * PageSummary / AdminPageSummary 를 나눈 것과 같은 결이며, 나중에 Java 백엔드가
  * 같은 JSON 을 돌려주려면 그쪽에도 이 좁은 DTO 가 있어야 한다.
@@ -115,6 +114,15 @@ export interface AdminUserSummary {
   id: string;
   loginId: string;
   name: string | null;
+  /**
+   * 가운데를 가린 전화번호 (`010-****-0000`). 동명이인을 가르는 용도다.
+   *
+   * **원래 번호는 이 계약에 실리지 않는다.** 구분에는 뒷자리면 충분하고, 전 회원의
+   * 번호가 한 응답에 실리는 순간 이 목록이 연락처 명부가 된다. 가리는 것은
+   * service 이며(userService.listUsersForAdmin) 모양은 format/phone 의 maskPhone 이
+   * 정한다. 탈퇴 계정은 번호가 지워져 null 이다.
+   */
+  maskedPhone: string | null;
   role: Role;
   status: UserStatus;
   /** 가입일. ISO 8601 문자열. */

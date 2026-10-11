@@ -20,7 +20,9 @@
 import { assertAuthenticated, assertRole } from "@/lib/auth/guards";
 import type { SessionPayload } from "@/lib/auth/session";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { maskPhone } from "@/lib/format/phone";
 import * as commentReportRepository from "@/lib/repositories/commentReportRepository";
+import type { AdminReportRecord } from "@/lib/repositories/commentReportRepository";
 import * as commentRepository from "@/lib/repositories/commentRepository";
 import * as commentService from "@/lib/services/commentService";
 import type {
@@ -136,6 +138,8 @@ export async function createReport(
  *
  * 필터 값을 여기서 던지지 않고 접는 이유와, 적용된 값을 되돌려주는 이유는
  * validation/report 의 parseReportStatusFilter 주석에 있다.
+ *
+ * **작성자 전화번호는 여기서 가린다** (userService.listUsersForAdmin 과 같은 규칙).
  */
 export async function listReportsForAdmin(
   session: SessionPayload | null,
@@ -166,7 +170,18 @@ export async function listReportsForAdmin(
   // "필터 없음"은 undefined 가 아니라 null 로 답한다. JSON 은 undefined 를
   // 직렬화하며 키를 통째로 지워버려, 클라이언트가 "전체"와 "이 서버는 status 를
   // 모른다"를 구분할 수 없게 된다 (listUsersForAdmin 과 같은 규칙).
-  return { items, total, ...window, status: status ?? null };
+  return { items: items.map(toAdminSummary), total, ...window, status: status ?? null };
+}
+
+/** 가리기 전 신고 행 → 응답 계약. 작성자의 원래 번호는 여기서 떨어진다. */
+function toAdminSummary({
+  authorPhone,
+  ...rest
+}: AdminReportRecord): AdminReportSummary {
+  return {
+    ...rest,
+    authorMaskedPhone: authorPhone === null ? null : maskPhone(authorPhone),
+  };
 }
 
 /**

@@ -19,6 +19,14 @@ type AdminUserTableProps = {
    * 가드는 페이지가 조회는 표가 하는 어긋난 상태가 생긴다 (AdminShell 과 같은 규칙).
    */
   currentUserId: string;
+  /**
+   * 이름 아래에 가린 전화번호를 그릴 것인가. `/admin/users` 만 켠다.
+   *
+   * 동명이인을 가르는 용도라 회원 전체를 다루는 화면에만 필요하다. `/admin/admins`
+   * 는 손으로 올린 소수의 계정이라 이름으로 충분하고, 이 표는 서버 컴포넌트라
+   * 끄면 그 값이 브라우저로 가지도 않는다.
+   */
+  showPhone?: boolean;
 };
 
 /** lg 미만에서 숨기는 보조 컬럼(역할 배지 · 가입일). 헤더 셀과 데이터 셀이 공유한다. */
@@ -53,6 +61,7 @@ const BLOCK_ADMIN_LOCK_REASON = "관리자는 차단할 수 없습니다";
 export default function AdminUserTable({
   users,
   currentUserId,
+  showPhone = false,
 }: AdminUserTableProps) {
   if (users.length === 0) {
     return (
@@ -138,6 +147,13 @@ export default function AdminUserTable({
                       결과이며, 대체 문구는 도메인이 아니라 화면의 몫이다. */}
                   {user.name ?? (
                     <span className="text-gray3">{WITHDRAWN_USER_NAME}</span>
+                  )}
+                  {/* 칸을 따로 두지 않고 이름 아래에 붙인다 — 이름과 함께 읽어야
+                      뜻이 있는 값이고, 칸을 늘리면 375px 에서 조작 칸이 밀린다. */}
+                  {showPhone && user.maskedPhone && (
+                    <span className="block whitespace-nowrap text-[13px] text-gray3">
+                      {user.maskedPhone}
+                    </span>
                   )}
                 </td>
 

@@ -88,6 +88,7 @@ export default async function AdminUsersPage({
         roleOptions={ROLE_OPTIONS}
         body={body}
         currentUserId={session.userId}
+        showPhone
       />
     </AdminShell>
   );

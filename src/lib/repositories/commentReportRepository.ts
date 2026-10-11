@@ -1,7 +1,7 @@
 // =============================================================
 // comment_reports 테이블 접근
 //
-// DB row(snake_case)를 도메인 모델(AdminReportSummary, camelCase)로 옮기는 것이
+// DB row(snake_case)를 도메인 모델(AdminReportRecord, camelCase)로 옮기는 것이
 // 이 레이어의 책임이다. PostgREST 임베디드 조회의 중첩 모양
 // (`comment: { author: { name } }`)도 여기서 평평하게 편다 — 그 모양이 위로
 // 새면 Java 백엔드로 갈아끼울 때 프론트까지 흔들린다.
@@ -20,6 +20,7 @@ import type {
   UserStatus,
 } from "@/lib/types";
 
+import { openField } from "./fieldCipher";
 import { getSupabase } from "./supabaseClient";
 
 const TABLE = "comment_reports";
@@ -33,6 +34,10 @@ const TABLE = "comment_reports";
  *
  * **작성자에서 status 까지 읽는다.** 차단 버튼을 "차단 / 차단 해제" 중 어느
  * 쪽으로 그릴지가 그 값에 달려 있고, 없으면 화면이 눌러 보고 나서야 안다.
+ *
+ * **작성자의 phone 도 읽는다.** 차단 대상이 동명이인 중 누구인지 가르는 데
+ * 뒷자리가 필요하다. 신고자 번호는 읽지 않는다 — 신고자에게는 아무 조작도
+ * 하지 않으니 가를 이유가 없다. 가리는 것은 service 다(reportService).
  */
 /*
  * ⚠️ **한 줄로 유지한다.** 이 문자열은 PostgREST 의 `select=` 쿼리 파라미터로
@@ -44,7 +49,7 @@ const TABLE = "comment_reports";
  * comments 쪽은 users 참조가 author_id 하나뿐이라 이름이 필요 없다.
  */
 const REPORT_COLUMNS =
-  "id, comment_id, reason, status, created_at, reporter:users!comment_reports_reporter_id_fkey(name), comment:comments(content, status, is_anonymous, author_id, page_id, author:users(name, status), page:pages(title))";
+  "id, comment_id, reason, status, created_at, reporter:users!comment_reports_reporter_id_fkey(name), comment:comments(content, status, is_anonymous, author_id, page_id, author:users(name, status, phone), page:pages(title))";
 
 /** userRepository 와 같은 이유로 여기서도 끝낸다 — unique 제약 충돌. */
 const PG_UNIQUE_VIOLATION = "23505";
@@ -73,9 +78,21 @@ type ReportRow = {
     is_anonymous: boolean;
     author_id: string;
     page_id: string;
-    author: { name: string | null; status: string } | null;
+    author: { name: string | null; status: string; phone: string | null } | null;
     page: { title: string } | null;
   } | null;
+};
+
+/**
+ * 신고 목록 한 줄 — 가리기 전 모양.
+ *
+ * AdminReportSummary 와 다른 칸은 하나다: 가린 번호(authorMaskedPhone) 대신
+ * 작성자의 **원래 번호(authorPhone)** 가 실린다. repository 와 service 사이에서만
+ * 살아 있어야 하며, service 가 가린 뒤에야 응답 계약이 된다
+ * (userRepository.AdminUserRecord 와 같은 경계).
+ */
+export type AdminReportRecord = Omit<AdminReportSummary, "authorMaskedPhone"> & {
+  authorPhone: string | null;
 };
 
 // ── 변환 ──────────────────────────────────────────────────────
@@ -87,7 +104,7 @@ type ReportRow = {
  * 아무 판단도 할 수 없고, 차단 버튼이 빈 authorId 로 그려지면 위험하다.
  * 그래서 null 을 돌려주고 호출부가 걸러낸다 (아래 findForAdmin).
  */
-function toReport(row: ReportRow): AdminReportSummary | null {
+function toReport(row: ReportRow): AdminReportRecord | null {
   if (!row.comment) return null;
 
   return {
@@ -105,6 +122,7 @@ function toReport(row: ReportRow): AdminReportSummary | null {
 
     authorId: row.comment.author_id,
     authorName: row.comment.author?.name ?? null,
+    authorPhone: openField(row.comment.author?.phone ?? null),
     // 작성자 행은 FK(on delete restrict)가 보증하므로 조인이 빌 수 없다.
     // 그래도 드라이버가 null 을 줄 여지를 남겨 두고 ACTIVE 로 접는다 —
     // "모르면 차단되지 않은 것으로 본다"가 안전한 기본값이다(차단 버튼이 그려진다).
@@ -144,7 +162,7 @@ export async function findForAdmin({
   status?: CommentReportStatus;
   page: number;
   size: number;
-}): Promise<{ items: AdminReportSummary[]; total: number }> {
+}): Promise<{ items: AdminReportRecord[]; total: number }> {
   const from = (page - 1) * size;
 
   const query = getSupabase()
@@ -165,7 +183,7 @@ export async function findForAdmin({
   // 두 번 계산하는 것일 뿐이고 페이지 수만 어긋날 여지가 생긴다.
   const items = (data ?? [])
     .map(toReport)
-    .filter((report): report is AdminReportSummary => report !== null);
+    .filter((report): report is AdminReportRecord => report !== null);
 
   return { items, total: count ?? 0 };
 }
@@ -180,7 +198,7 @@ export async function findForAdmin({
  */
 export async function findRecentPending(
   limit: number,
-): Promise<AdminReportSummary[]> {
+): Promise<AdminReportRecord[]> {
   const { data, error } = await getSupabase()
     .from(TABLE)
     .select(REPORT_COLUMNS)
@@ -193,13 +211,13 @@ export async function findRecentPending(
 
   return (data ?? [])
     .map(toReport)
-    .filter((report): report is AdminReportSummary => report !== null);
+    .filter((report): report is AdminReportRecord => report !== null);
 }
 
 /** id 로 신고 한 건. 없으면 null. 처리 액션이 대상을 확인할 때 쓴다. */
 export async function findById(
   id: string,
-): Promise<AdminReportSummary | null> {
+): Promise<AdminReportRecord | null> {
   const { data, error } = await getSupabase()
     .from(TABLE)
     .select(REPORT_COLUMNS)
